@@ -1,0 +1,21 @@
+.venv/
+__pycache__/
+*.py[cod]
+
+# Raw LAV-DF data and split archive parts
+datasets/LAV-DF/
+datasets/LAV-DF.zip.*
+
+# Generated local data and outputs
+data/
+results/test/
+*.log
+
+# Local model checkpoints
+*.pth
+*.pt
+*.ckpt
+
+# Notebook and tooling noise
+.ipynb_checkpoints/
+.vscode/

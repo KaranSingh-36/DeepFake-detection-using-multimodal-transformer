@@ -1,0 +1,9 @@
+numpy
+pandas
+opencv-python
+tqdm
+librosa
+soundfile
+torch
+torchvision
+torchaudio
