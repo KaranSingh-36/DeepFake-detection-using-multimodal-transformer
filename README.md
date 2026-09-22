@@ -419,6 +419,7 @@ Version Control     Git / GitHub
 Author
 
 Karan Singh
+Tushar
 
 MCA --- Artificial Intelligence & Machine Learning
 
