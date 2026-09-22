@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import pandas as pd
 
 # Add project root to Python path
 PROJECT_ROOT = os.path.dirname(
@@ -27,8 +28,8 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 BATCH_SIZE = 1
 EPOCHS = 1
 
-TRAIN_SAMPLES = 2000
-VAL_SAMPLES = 400
+TRAIN_SAMPLES = 10000
+VAL_SAMPLES = 2000
 
 NUM_FRAMES = 8
 IMAGE_SIZE = 224
@@ -44,7 +45,7 @@ os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 # ================================================================
 
 print("=" * 70)
-print("MULTIMODAL 2000-SAMPLE TRAINING")
+print("MULTIMODAL 10000-SAMPLE TRAINING")
 print("=" * 70)
 
 print(f"Device: {DEVICE}")
@@ -88,28 +89,131 @@ dev_dataset = LAVDFDataset(
 print(f"Full training dataset: {len(train_dataset)}")
 print(f"Full validation dataset: {len(dev_dataset)}")
 
-
 # ================================================================
-# CONTROLLED SUBSETS
+# CONTROLLED STRATIFIED SUBSETS
 # ================================================================
 
-train_count = min(TRAIN_SAMPLES, len(train_dataset))
-val_count = min(VAL_SAMPLES, len(dev_dataset))
+print()
+print("Creating controlled stratified subsets...")
+
+SEED = 42
+
+# Read metadata
+metadata = pd.read_csv("metadata/lavdf_metadata.csv")
+
+# Keep only the corresponding splits
+train_meta = metadata[
+    metadata["split"] == "train"
+].reset_index(drop=True)
+
+dev_meta = metadata[
+    metadata["split"] == "dev"
+].reset_index(drop=True)
+
+# ------------------------------------------------
+# Training subset
+# ------------------------------------------------
+
+train_real = train_meta[
+    train_meta["label"] == 0
+]
+
+train_fake = train_meta[
+    train_meta["label"] == 1
+]
+
+# Preserve original class distribution
+train_real_count = round(
+    TRAIN_SAMPLES * len(train_real) / len(train_meta)
+)
+
+train_fake_count = TRAIN_SAMPLES - train_real_count
+
+train_real_sample = train_real.sample(
+    n=train_real_count,
+    random_state=SEED
+)
+
+train_fake_sample = train_fake.sample(
+    n=train_fake_count,
+    random_state=SEED
+)
+
+train_selected = pd.concat(
+    [train_real_sample, train_fake_sample]
+).sample(
+    frac=1,
+    random_state=SEED
+)
+
+# Dataset indices
+train_indices = train_selected.index.tolist()
+
+# ------------------------------------------------
+# Validation subset
+# ------------------------------------------------
+
+dev_real = dev_meta[
+    dev_meta["label"] == 0
+]
+
+dev_fake = dev_meta[
+    dev_meta["label"] == 1
+]
+
+dev_real_count = round(
+    VAL_SAMPLES * len(dev_real) / len(dev_meta)
+)
+
+dev_fake_count = VAL_SAMPLES - dev_real_count
+
+dev_real_sample = dev_real.sample(
+    n=dev_real_count,
+    random_state=SEED
+)
+
+dev_fake_sample = dev_fake.sample(
+    n=dev_fake_count,
+    random_state=SEED
+)
+
+dev_selected = pd.concat(
+    [dev_real_sample, dev_fake_sample]
+).sample(
+    frac=1,
+    random_state=SEED
+)
+
+# Dataset indices
+dev_indices = dev_selected.index.tolist()
+
+# ------------------------------------------------
+# Create subsets
+# ------------------------------------------------
 
 train_dataset = Subset(
     train_dataset,
-    range(train_count)
+    train_indices
 )
 
 dev_dataset = Subset(
     dev_dataset,
-    range(val_count)
+    dev_indices
 )
 
-print(f"Training samples used: {len(train_dataset)}")
-print(f"Validation samples used: {len(dev_dataset)}")
+print()
+print("CONTROLLED SUBSET CREATED")
+print("-" * 70)
+print(f"Training samples:   {len(train_dataset)}")
+print(f"  REAL:             {train_real_count}")
+print(f"  DEEPFAKE:         {train_fake_count}")
 
+print(f"Validation samples: {len(dev_dataset)}")
+print(f"  REAL:             {dev_real_count}")
+print(f"  DEEPFAKE:         {dev_fake_count}")
 
+print(f"Random seed:        {SEED}")
+print("-" * 70)
 # ================================================================
 # DATALOADERS
 # ================================================================
@@ -117,7 +221,7 @@ print(f"Validation samples used: {len(dev_dataset)}")
 train_loader = DataLoader(
     train_dataset,
     batch_size=BATCH_SIZE,
-    shuffle=False,
+    shuffle=True,
     num_workers=0,
     pin_memory=torch.cuda.is_available()
 )
@@ -289,6 +393,33 @@ print(f"Validation Loss: {val_loss:.4f}")
 print(f"Validation Accuracy: {val_accuracy:.2f}%")
 print(f"Validation Samples: {val_total}")
 
+# ============================================================
+# SAVE CHECKPOINT AFTER EVERY EPOCH
+# ============================================================
+
+checkpoint_path = os.path.join(
+    CHECKPOINT_DIR,
+    f"multimodal_10000_epoch_{epoch + 1}.pth"
+)
+
+torch.save({
+    "epoch": epoch + 1,
+    "model_state_dict": model.state_dict(),
+    "optimizer_state_dict": optimizer.state_dict(),
+
+    "train_loss": epoch_loss,
+    "train_accuracy": 100.0 * correct / total,
+
+    "val_loss": val_loss,
+    "val_accuracy": val_accuracy,
+
+    "train_samples": TRAIN_SAMPLES,
+    "val_samples": VAL_SAMPLES,
+
+}, checkpoint_path)
+
+print("\nCheckpoint saved:")
+print(checkpoint_path)
 
 # ================================================================
 # GPU MEMORY
@@ -318,35 +449,7 @@ if torch.cuda.is_available():
     print(f"Peak allocated:    {peak:.2f} GB")
 
 
-# ================================================================
-# SAVE CHECKPOINT
-# ================================================================
-
-checkpoint_path = (
-    f"{CHECKPOINT_DIR}/"
-    "multimodal_2000_epoch1.pth"
-)
-
-torch.save(
-    {
-        "epoch": EPOCHS,
-        "model_state_dict": model.state_dict(),
-        "optimizer_state_dict": optimizer.state_dict(),
-        "train_loss": epoch_loss,
-        "train_accuracy": train_accuracy,
-        "val_loss": val_loss,
-        "val_accuracy": val_accuracy,
-        "train_samples": len(train_dataset),
-        "validation_samples": len(dev_dataset),
-    },
-    checkpoint_path
-)
-
-print()
-print(f"Checkpoint saved to:")
-print(checkpoint_path)
-
 print()
 print("=" * 70)
-print("2000-SAMPLE MULTIMODAL TRAINING COMPLETED")
+print("10000-SAMPLE MULTIMODAL TRAINING COMPLETED")
 print("=" * 70)
