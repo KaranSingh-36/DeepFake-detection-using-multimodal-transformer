@@ -1,430 +1,103 @@
-﻿Deepfake Detection Using Multimodal Transformer Architecture
+# 🎭 Deepfake Detection Using Multimodal Transformers
 
-Overview
+### Audio-Visual Deepfake Detection for Cybersecurity Applications
 
-This project develops a multimodal deepfake detection system for
-cybersecurity applications. The proposed architecture jointly analyzes
-visual and audio information from videos using pretrained Transformer
-models and bidirectional cross-attention.
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.12-blue?style=for-the-badge&logo=python" alt="Python">
+  <img src="https://img.shields.io/badge/PyTorch-Deep%20Learning-orange?style=for-the-badge&logo=pytorch" alt="PyTorch">
+  <img src="https://img.shields.io/badge/Transformers-Hugging%20Face-yellow?style=for-the-badge&logo=huggingface" alt="Transformers">
+  <img src="https://img.shields.io/badge/ViT-Vision%20Transformer-purple?style=for-the-badge" alt="ViT">
+  <img src="https://img.shields.io/badge/Wav2Vec2-Audio%20Transformer-green?style=for-the-badge" alt="Wav2Vec2">
+  <img src="https://img.shields.io/badge/Dataset-LAV--DF-red?style=for-the-badge" alt="LAV-DF">
+</p>
 
-Core architecture
+<p align="center">
+  <b>A research-oriented multimodal deepfake detection system that jointly analyzes visual and audio information from videos.</b>
+</p>
 
-                    Input Video
-                         |
-             +-----------+-----------+
-             |                       |
-             v                       v
-       Frame Extraction          Audio Extraction
-             |                       |
-             v                       v
-       Vision Transformer        Wav2Vec2
-             |                       |
-             v                       v
-       Visual Tokens             Audio Tokens
-             |                       |
-             +-----------+-----------+
-                         |
-                  Bidirectional
-                  Cross-Attention
-                         |
-                    Feature Fusion
-                         |
-                    Classifier
-                     /       \
-                  REAL     DEEPFAKE
+---
 
-Objectives
+## 📌 Overview
 
-Develop video-only and audio-only deepfake detection baselines.
+Deepfakes are AI-generated or manipulated media that can convincingly alter a person's appearance, speech, or behavior.
 
-Develop a multimodal Transformer architecture.
+Traditional deepfake detection systems often focus on only one modality, such as video frames or audio. However, modern deepfakes can manipulate multiple modalities simultaneously.
 
-Investigate bidirectional audio-visual cross-attention.
+This project investigates a **multimodal Transformer-based approach** that analyzes both:
 
-Compare cross-attention fusion with simpler fusion methods.
+- 🎥 **Visual information** from video frames
+- 🎙️ **Audio information** from speech/audio tracks
 
-Perform rigorous evaluation and ablation studies.
+The extracted representations are combined using **bidirectional cross-attention**, allowing the visual and audio modalities to exchange information before classification.
 
-Investigate Grad-CAM and SHAP for explainability.
+The final system predicts whether the input video is:
 
-Evaluate cross-dataset generalization.
+> **REAL** or **DEEPFAKE**
 
-Deploy the trained model through an API and interactive dashboard.
+---
 
-Models
+## 🎯 Project Objectives
 
-Visual branch
+The main objectives of this project are:
 
-Vision Transformer
+- Build a **video-only deepfake detection baseline**
+- Build an **audio-only deepfake detection baseline**
+- Develop a **multimodal audio-visual Transformer architecture**
+- Use **Vision Transformer (ViT)** for visual representation learning
+- Use **Wav2Vec2** for audio representation learning
+- Investigate **bidirectional cross-attention** between audio and visual features
+- Compare cross-attention fusion with simpler feature-fusion methods
+- Perform systematic evaluation using multiple classification metrics
+- Conduct ablation studies to understand the contribution of different components
+- Investigate multimodal explainability using techniques such as **Grad-CAM** and **SHAP**
+- Study the potential for **cross-dataset generalization**
+- Develop an API and interactive interface for future deployment
 
-google/vit-base-patch16-224
+---
 
-Video frames are processed individually and their CLS representations
-are organized as a temporal visual sequence.
+## 🔬 Research Question
 
-Expected representation:
+> **Does bidirectional cross-attention between visual and audio representations provide useful information for deepfake detection beyond unimodal models and simple feature concatenation?**
 
-[B, T, 768]
+The project is designed to investigate this question experimentally through:
 
-Audio branch
+1. Video-only baseline
+2. Audio-only baseline
+3. Simple multimodal feature fusion
+4. Proposed multimodal cross-attention architecture
+5. Ablation studies
+6. Cross-dataset evaluation
 
-Wav2Vec2
+---
 
-facebook/wav2vec2-base
+# 🧠 System Architecture
 
-Audio is processed as a 16 kHz waveform.
+The proposed system processes the video through two separate modalities.
 
-Expected representation:
+```mermaid
+flowchart LR
 
-[B, audio_sequence_length, 768]
+    A[Input Video]
 
-Multimodal fusion
+    A --> B[Video Frame Extraction]
+    A --> C[Audio Extraction]
 
-The model performs:
+    B --> D[Vision Transformer<br/>ViT]
+    C --> E[Wav2Vec2]
 
-Visual-to-audio cross-attention.
+    D --> F[Visual Tokens]
+    E --> G[Audio Tokens]
 
-Audio-to-visual cross-attention.
+    F --> H[Visual-to-Audio<br/>Cross Attention]
+    G --> I[Audio-to-Visual<br/>Cross Attention]
 
-Residual connections and normalization.
+    H --> J[Multimodal Feature Fusion]
+    I --> J
 
-Feed-forward transformations.
+    J --> K[Temporal Pooling]
+    K --> L[Binary Classifier]
 
-Temporal pooling.
+    L --> M{Prediction}
 
-Feature fusion.
-
-Binary classification.
-
-Classes:
-
-0 = REAL
-1 = DEEPFAKE
-
-Dataset
-
-The primary development dataset is LAV-DF.
-
-Current extracted dataset:
-
-Split     Samples
-
-Train      78,703
-Dev        31,501
-Test       26,100
-Total     136,304
-
-The metadata includes video paths, fake periods, duration, modification
-information, split information, and audio/video properties.
-
-Additional datasets such as FakeAVCeleb, DFDC-related benchmarks, and
-AV-Deepfake1M may be used later for cross-dataset evaluation where
-access and licensing permit.
-
-Project Structure
-
-major project/
-├── .venv/
-├── api/
-├── dataset/
-│   ├── lavdf_dataset.py
-│   └── test_dataloader.py
-├── datasets/
-│   └── LAV-DF/
-├── evaluation/
-│   ├── evaluation.py
-│   ├── test_video_inference.py
-│   ├── test_multimodal_model.py
-│   └── test_multimodal_backward.py
-├── explainability/
-├── metadata/
-│   └── lavdf_metadata.csv
-├── models/
-│   ├── audio_model.py
-│   ├── multimodal_model.py
-│   └── video_model.py
-├── preprocessing/
-│   ├── create_metadata.py
-│   ├── extract_audio.py
-│   ├── extract_frames.py
-│   ├── inspect_dataset.py
-│   └── test_lavdf.py
-├── results/
-├── training/
-│   ├── train_baseline.py
-│   ├── train_multimodal.py
-│   └── train_video_baseline.py
-├── .gitignore
-├── README.md
-└── requirements.txt
-
-Environment
-
-Primary development hardware:
-
-NVIDIA GeForce RTX 3050 Laptop GPU
-
-4 GB dedicated VRAM
-
-CUDA-enabled PyTorch
-
-Python 3.12.x
-
-Windows
-
-VS Code
-
-The multimodal model is memory-intensive. Training may use mixed
-precision, gradient accumulation, gradient checkpointing, and
-appropriate batch sizing while preserving the proposed architecture.
-
-Setup
-
-Create and activate the virtual environment:
-
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-
-Install dependencies:
-
-pip install -r requirements.txt
-
-Verify FFmpeg:
-
-ffmpeg -version
-
-Dataset Verification
-
-Verify LAV-DF video loading:
-
-python preprocessing/test_lavdf.py
-
-Verify audio extraction:
-
-python preprocessing/extract_audio.py
-
-Create metadata:
-
-python preprocessing/create_metadata.py
-
-Test the DataLoader:
-
-python dataset/test_dataloader.py
-
-Model Tests
-
-Video model:
-
-python evaluation/test_video_inference.py
-
-Multimodal forward pass:
-
-python evaluation/test_multimodal_model.py
-
-Multimodal backward and optimizer test:
-
-python evaluation/test_multimodal_backward.py
-
-The current development tests have successfully verified the multimodal
-forward pass, cross-attention, backward propagation, gradients, and
-optimizer update on the RTX 3050.
-
-Experimental Plan
-
-The research experiments will compare:
-
-Video-only baseline
-
-Video → ViT → Classifier
-
-Audio-only baseline
-
-Audio → Wav2Vec2 → Classifier
-
-Simple multimodal fusion
-
-Video → ViT ─────┐
-                 ├→ Concatenation → Classifier
-Audio → Wav2Vec2 ┘
-
-Proposed model
-
-Video → ViT ─────────────┐
-                         ↓
-                  Cross-Attention
-                         ↑
-Audio → Wav2Vec2 ────────┘
-                         ↓
-                      Fusion
-                         ↓
-                    Classifier
-
-Evaluation
-
-Final experiments will report:
-
-Accuracy
-
-Precision
-
-Recall
-
-F1-score
-
-ROC-AUC
-
-Confusion matrix
-
-Per-class metrics
-
-Training and validation curves
-
-Additional measurements may include inference time and GPU memory usage.
-
-Ablation Studies
-
-Planned ablations include:
-
-Video-only vs audio-only vs multimodal.
-
-Simple concatenation vs cross-attention.
-
-Different numbers of sampled frames.
-
-Different audio durations.
-
-Frozen vs fine-tuned pretrained encoders.
-
-Different fusion configurations.
-
-Explainability
-
-The project plans to investigate:
-
-Grad-CAM for visual evidence.
-
-SHAP for feature and multimodal contribution analysis.
-
-The objective is to provide evidence supporting model predictions rather
-than only returning a binary label.
-
-Deployment
-
-After research experiments are completed, a FastAPI service and
-interactive dashboard are planned.
-
-Target workflow:
-
-Upload Video
-     ↓
-Preprocessing
-     ↓
-Visual + Audio Extraction
-     ↓
-Multimodal Transformer
-     ↓
-REAL / DEEPFAKE
-     ↓
-Confidence + Explainability
-
-Current Development Status
-
-Completed
-
-LAV-DF dataset acquisition and extraction
-
-Dataset inspection
-
-Metadata generation
-
-Video preprocessing
-
-Audio extraction
-
-CUDA/PyTorch configuration
-
-RTX 3050 detection
-
-ViT visual model
-
-Wav2Vec2 audio model
-
-LAV-DF DataLoader
-
-Video baseline smoke test
-
-Multimodal model implementation
-
-Multimodal forward-pass test
-
-Multimodal backward-pass test
-
-Optimizer-step test
-
-Next
-
-Real-data multimodal training smoke test
-
-Full baseline experiments
-
-Proposed-model training
-
-Final evaluation
-
-Ablation studies
-
-Explainability
-
-Cross-dataset testing
-
-FastAPI deployment
-
-Dashboard
-
-Research paper
-
-Reproducibility
-
-Development smoke tests are not final research results.
-
-Final experiments will save checkpoints, metrics, plots, confusion
-matrices, ablation results, cross-dataset results, and explainability
-outputs under the results/ directory so that reported research metrics
-can be reproduced from clean runs.
-
-Research Direction
-
-The central research question is whether bidirectional multimodal
-cross-attention between visual and audio representations provides useful
-information beyond unimodal models and simple feature concatenation for
-audio-visual deepfake detection.
-
-Technologies
-
-Category            Technology
-
-Language            Python
-Deep Learning       PyTorch
-Visual Model        Vision Transformer
-Audio Model         Wav2Vec2
-Multimodal Fusion   Cross-Attention
-Computer Vision     OpenCV
-Audio Processing    FFmpeg
-Transformers        Hugging Face Transformers
-Explainability      Grad-CAM, SHAP
-API                 FastAPI
-Development         VS Code
-Version Control     Git / GitHub
-
-Author
-
-Karan Singh
-Tushar
-
-MCA --- Artificial Intelligence & Machine Learning
-
-GitHub: https://github.com/KaranSingh-36
-
-Project Status
-
-Research and Development --- In Progress
+    M --> N[REAL]
+    M --> O[DEEPFAKE]
