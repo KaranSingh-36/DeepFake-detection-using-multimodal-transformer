@@ -1,0 +1,31 @@
+{
+    "experiment": {
+        "model": "Multimodal Transformer",
+        "dataset": "LAV-DF",
+        "training_samples": 25000,
+        "epochs": 2,
+        "test_samples": 26100
+    },
+    "metrics": {
+        "accuracy": 0.9765134099616858,
+        "true_negative": 6897,
+        "false_positive": 9,
+        "false_negative": 604,
+        "true_positive": 18590,
+        "false_positive_rate": 0.0013032145960034753,
+        "false_negative_rate": 0.0314681671355632
+    },
+    "prediction_file": "results/test/multimodal_25000_epoch2_test_predictions.csv",
+    "metadata_file": "metadata/lavdf_metadata.csv",
+    "outputs": {
+        "false_positives": "false_positives.csv",
+        "false_negatives": "false_negatives.csv",
+        "all_errors": "all_errors.csv",
+        "error_distribution": "error_distribution.csv",
+        "error_by_modality": "error_by_modality.csv",
+        "error_by_fake_segments": "error_by_fake_segments.csv",
+        "error_by_duration": "error_by_duration.csv",
+        "highest_confidence_errors": "highest_confidence_errors.csv",
+        "uncertain_predictions": "uncertain_predictions.csv"
+    }
+}

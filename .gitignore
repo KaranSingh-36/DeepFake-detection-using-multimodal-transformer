@@ -5,6 +5,8 @@ __pycache__/
 # Raw LAV-DF data and split archive parts
 datasets/LAV-DF/
 datasets/LAV-DF.zip.*
+datasets/FakeAVCeleb_v1.2.zip
+datasets/FakeAVCeleb_v1.2/
 
 # Generated local data and outputs
 data/
