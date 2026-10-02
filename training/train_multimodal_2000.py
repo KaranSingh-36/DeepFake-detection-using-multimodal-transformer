@@ -15,7 +15,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, Subset
 
 from dataset.lavdf_dataset import LAVDFDataset
-from models.multimodel_model import MultimodalCrossAttentionModel
+from models.multimodal_model import MultimodalCrossAttentionModel
 
 
 # ================================================================

@@ -39,7 +39,7 @@ if PROJECT_ROOT not in sys.path:
 # ================================================================
 
 from dataset.lavdf_dataset import LAVDFDataset
-from models.multimodel_model import MultimodalCrossAttentionModel
+from models.multimodal_model import MultimodalCrossAttentionModel
 
 
 # ================================================================

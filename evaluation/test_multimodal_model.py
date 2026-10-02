@@ -10,7 +10,7 @@ sys.path.insert(0, PROJECT_ROOT)
 
 import torch
 
-from models.multimodel_model import (
+from models.multimodal_model import (
     MultimodalCrossAttentionModel
 )
 
