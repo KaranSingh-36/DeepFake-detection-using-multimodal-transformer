@@ -1,22 +1,15 @@
 import os
 import subprocess
 
+import cv2
 import numpy as np
 import pandas as pd
-import cv2
 import torch
 from torch.utils.data import Dataset
 
 
 class LAVDFDataset(Dataset):
-    """
-    LAV-DF dataset loader.
-
-    Returns:
-        frames: [num_frames, 3, 224, 224]
-        audio:  [audio_samples]
-        label:  0 = real, 1 = deepfake
-    """
+    """LAV-DF loader optimized for Windows multi-worker training."""
 
     def __init__(
         self,
@@ -28,382 +21,186 @@ class LAVDFDataset(Dataset):
         sample_rate=16000,
         audio_duration=4.0,
     ):
-
         self.metadata_csv = metadata_csv
         self.dataset_root = dataset_root
         self.split = split
+        self.num_frames = int(num_frames)
+        self.image_size = int(image_size)
+        self.sample_rate = int(sample_rate)
+        self.audio_duration = float(audio_duration)
+        self.num_audio_samples = int(self.sample_rate * self.audio_duration)
 
-        self.num_frames = num_frames
-        self.image_size = image_size
-        self.sample_rate = sample_rate
-        self.audio_duration = audio_duration
+        metadata = pd.read_csv(self.metadata_csv)
+        metadata = metadata[metadata["split"] == self.split].reset_index(drop=True)
 
-        self.num_audio_samples = int(
-            self.sample_rate * self.audio_duration
-        )
+        if len(metadata) == 0:
+            raise ValueError(f"No samples found for split='{self.split}'")
 
-        # ImageNet normalization.
-        # Store as NumPy arrays so they are not recreated
-        # for every frame/sample.
-        self.mean = np.array(
-            [0.485, 0.456, 0.406],
-            dtype=np.float32
-        ).reshape(1, 1, 3)
+        # Avoid pandas.iloc() for every sample.
+        self.files = metadata["file"].astype(str).tolist()
+        self.labels = metadata["label"].astype(np.int64).to_numpy(copy=True)
 
-        self.std = np.array(
-            [0.229, 0.224, 0.225],
-            dtype=np.float32
-        ).reshape(1, 1, 3)
+        # Reused by every sample.
+        self._mean = torch.tensor(
+            [0.485, 0.456, 0.406], dtype=torch.float32
+        ).view(1, 3, 1, 1)
 
-        # --------------------------------------------------------
-        # LOAD METADATA
-        # --------------------------------------------------------
+        self._std = torch.tensor(
+            [0.229, 0.224, 0.225], dtype=torch.float32
+        ).view(1, 3, 1, 1)
 
-        self.metadata = pd.read_csv(
-            self.metadata_csv
-        )
-
-        self.metadata = self.metadata[
-            self.metadata["split"] == self.split
-        ].reset_index(drop=True)
-
-        if len(self.metadata) == 0:
-            raise ValueError(
-                f"No samples found for split='{self.split}'"
-            )
-
-        print(
-            f"LAV-DF {self.split} dataset loaded: "
-            f"{len(self.metadata)} samples"
-        )
+        print(f"LAV-DF {self.split} dataset loaded: {len(self.files)} samples")
 
     def __len__(self):
-        return len(self.metadata)
-
-    # ============================================================
-    # VIDEO PATH
-    # ============================================================
+        return len(self.files)
 
     def _get_video_path(self, relative_path):
-
         return os.path.join(
             self.dataset_root,
-            relative_path.replace("/", os.sep)
+            relative_path.replace("/", os.sep),
         )
-
-    # ============================================================
-    # VIDEO LOADING
-    # ============================================================
 
     def _load_frames(self, video_path):
         """
-        Sequentially decode the video and keep approximately
-        equally-spaced frames.
-
-        This avoids repeated random seeking using:
-
-            cap.set(CAP_PROP_POS_FRAMES, ...)
-
-        which was used by the previous implementation.
-
-        Returns:
-            Tensor [num_frames, 3, image_size, image_size]
+        Sequentially decode once and retrieve only requested frames.
+        This avoids repeated cap.set() seeks.
         """
-
         cap = cv2.VideoCapture(video_path)
 
         if not cap.isOpened():
-            raise RuntimeError(
-                f"Could not open video: {video_path}"
-            )
+            raise RuntimeError(f"Could not open video: {video_path}")
 
-        total_frames = int(
-            cap.get(cv2.CAP_PROP_FRAME_COUNT)
-        )
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
         if total_frames <= 0:
             cap.release()
-
-            raise RuntimeError(
-                f"Video contains no frames: {video_path}"
-            )
-
-        # --------------------------------------------------------
-        # SELECT TARGET FRAME INDICES
-        # --------------------------------------------------------
+            raise RuntimeError(f"Video contains no frames: {video_path}")
 
         frame_indices = np.linspace(
             0,
             total_frames - 1,
             self.num_frames,
-            dtype=np.int64
-        )
-
-        target_positions = set(
-            int(x)
-            for x in frame_indices
+            dtype=np.int64,
         )
 
         frames = []
-
+        target_ptr = 0
         frame_index = 0
+        last_frame = None
 
-        # --------------------------------------------------------
-        # SEQUENTIAL DECODE
-        # --------------------------------------------------------
-
-        while frame_index < total_frames:
-
-            success, frame = cap.read()
+        while target_ptr < len(frame_indices):
+            success = cap.grab()
 
             if not success:
                 break
 
-            if frame_index in target_positions:
+            target_index = int(frame_indices[target_ptr])
 
-                # BGR -> RGB
-                frame = cv2.cvtColor(
-                    frame,
-                    cv2.COLOR_BGR2RGB
-                )
+            if frame_index == target_index:
+                success, frame = cap.retrieve()
 
-                # Resize
-                frame = cv2.resize(
-                    frame,
-                    (
-                        self.image_size,
-                        self.image_size
-                    ),
-                    interpolation=cv2.INTER_LINEAR
-                )
-
-                # uint8 -> float32 [0, 1]
-                frame = frame.astype(
-                    np.float32
-                ) / 255.0
-
-                # ImageNet normalization
-                frame = (
-                    frame - self.mean
-                ) / self.std
+                if not success:
+                    if last_frame is None:
+                        cap.release()
+                        raise RuntimeError(
+                            f"Could not read frame from: {video_path}"
+                        )
+                    frame = last_frame.copy()
+                else:
+                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    frame = cv2.resize(
+                        frame,
+                        (self.image_size, self.image_size),
+                        interpolation=cv2.INTER_LINEAR,
+                    )
+                    frame = frame.astype(np.float32) / 255.0
+                    last_frame = frame
 
                 frames.append(frame)
-
-                # We already have all requested frames.
-                if len(frames) >= self.num_frames:
-                    break
+                target_ptr += 1
 
             frame_index += 1
 
+            if frame_index >= total_frames:
+                break
+
         cap.release()
 
-        # --------------------------------------------------------
-        # FALLBACK IF VIDEO DECODING ENDED EARLY
-        # --------------------------------------------------------
-
-        if len(frames) == 0:
-            raise RuntimeError(
-                f"Could not read frames from: {video_path}"
-            )
+        if not frames:
+            raise RuntimeError(f"Could not read frames from: {video_path}")
 
         while len(frames) < self.num_frames:
+            frames.append(frames[-1].copy())
 
-            frames.append(
-                frames[-1].copy()
-            )
+        frames = np.stack(frames[:self.num_frames])
+        frames = np.transpose(frames, (0, 3, 1, 2))
+        frames = torch.from_numpy(frames.copy()).float()
+        frames = (frames - self._mean) / self._std
 
-        frames = np.stack(
-            frames,
-            axis=0
-        )
-
-        # [T, H, W, C] -> [T, C, H, W]
-        frames = np.transpose(
-            frames,
-            (0, 3, 1, 2)
-        )
-
-        frames = np.ascontiguousarray(
-            frames
-        )
-
-        return torch.from_numpy(
-            frames
-        ).float()
-
-    # ============================================================
-    # AUDIO LOADING
-    # ============================================================
+        return frames
 
     def _load_audio(self, video_path):
         """
-        Extract mono 16-kHz audio from the MP4 using FFmpeg.
-
-        Only the required audio duration is decoded.
-
-        Returns:
-            Tensor [audio_samples]
+        Ask FFmpeg for only the 4-second window needed by Wav2Vec2.
         """
-
         command = [
             "ffmpeg",
-
-            "-v",
-            "error",
-
-            "-i",
-            video_path,
-
-            # Only decode the required duration.
-            "-t",
-            str(self.audio_duration),
-
-            # Disable video/subtitle/data streams.
-            "-vn",
-            "-sn",
-            "-dn",
-
-            # Mono
-            "-ac",
-            "1",
-
-            # 16 kHz
-            "-ar",
-            str(self.sample_rate),
-
-            # Raw float32 PCM
-            "-f",
-            "f32le",
-
+            "-v", "error",
+            "-i", video_path,
+            "-t", f"{self.audio_duration:.3f}",
+            "-ac", "1",
+            "-ar", str(self.sample_rate),
+            "-f", "f32le",
             "pipe:1",
         ]
 
         try:
-
             result = subprocess.run(
                 command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 check=True,
             )
-
         except subprocess.CalledProcessError as e:
-
-            error_message = e.stderr.decode(
-                "utf-8",
-                errors="ignore"
-            )
-
+            error_message = e.stderr.decode("utf-8", errors="ignore")
             raise RuntimeError(
                 "FFmpeg audio extraction failed:\n"
-                f"{video_path}\n"
-                f"{error_message}"
-            )
+                f"{video_path}\n{error_message}"
+            ) from e
 
-        audio = np.frombuffer(
-            result.stdout,
-            dtype=np.float32
-        ).copy()
+        audio = np.frombuffer(result.stdout, dtype=np.float32).copy()
 
         if len(audio) == 0:
-            raise RuntimeError(
-                f"No audio found in: {video_path}"
-            )
-
-        # --------------------------------------------------------
-        # FIX AUDIO LENGTH
-        # --------------------------------------------------------
+            raise RuntimeError(f"No audio found in: {video_path}")
 
         if len(audio) < self.num_audio_samples:
-
             audio = np.pad(
                 audio,
-                (
-                    0,
-                    self.num_audio_samples - len(audio)
-                ),
-                mode="constant"
+                (0, self.num_audio_samples - len(audio)),
+                mode="constant",
             )
-
         else:
+            audio = audio[:self.num_audio_samples]
 
-            audio = audio[
-                :self.num_audio_samples
-            ]
-
-        audio = np.ascontiguousarray(
-            audio
-        )
-
-        return torch.from_numpy(
-            audio
-        ).float()
-
-    # ============================================================
-    # GET ITEM
-    # ============================================================
+        return torch.from_numpy(audio).float()
 
     def __getitem__(self, index):
+        relative_path = self.files[index]
+        label = int(self.labels[index])
+        video_path = self._get_video_path(relative_path)
 
-        row = self.metadata.iloc[index]
-
-        relative_path = row["file"]
-
-        video_path = self._get_video_path(
-            relative_path
-        )
-
-        if not os.path.exists(video_path):
-
-            raise FileNotFoundError(
-                f"Video does not exist:\n"
-                f"{video_path}"
-            )
-
-        # --------------------------------------------------------
-        # VIDEO
-        # --------------------------------------------------------
-
-        frames = self._load_frames(
-            video_path
-        )
-
-        # --------------------------------------------------------
-        # AUDIO
-        # --------------------------------------------------------
-
-        audio = self._load_audio(
-            video_path
-        )
-
-        # --------------------------------------------------------
-        # LABEL
-        # --------------------------------------------------------
-
-        label = int(
-            row["label"]
-        )
+        if not os.path.isfile(video_path):
+            raise FileNotFoundError(f"Video does not exist:\n{video_path}")
 
         return {
-            "frames": frames,
-
-            "audio": audio,
-
-            "label": torch.tensor(
-                label,
-                dtype=torch.long
-            ),
-
+            "frames": self._load_frames(video_path),
+            "audio": self._load_audio(video_path),
+            "label": torch.tensor(label, dtype=torch.long),
             "file": relative_path,
         }
 
 
-# ================================================================
-# DATASET TEST
-# ================================================================
-
 if __name__ == "__main__":
-
     print("=" * 60)
     print("Testing LAV-DF Dataset Loader")
     print("=" * 60)
@@ -416,46 +213,19 @@ if __name__ == "__main__":
         audio_duration=4.0,
     )
 
-    print()
     print("Dataset size:", len(dataset))
-
-    print()
-    print("Loading first sample...")
-
     sample = dataset[0]
-
-    print()
-    print("File:")
-    print(sample["file"])
-
-    print()
-    print("Frames shape:")
-    print(sample["frames"].shape)
-
-    print()
-    print("Audio shape:")
-    print(sample["audio"].shape)
-
-    print()
-    print("Label:")
-    print(sample["label"].item())
-
-    print()
-    print("Frame dtype:")
-    print(sample["frames"].dtype)
-
-    print()
-    print("Audio dtype:")
-    print(sample["audio"].dtype)
-
-    print()
-    print("Audio min/max:")
+    print("File:", sample["file"])
+    print("Frames shape:", sample["frames"].shape)
+    print("Audio shape:", sample["audio"].shape)
+    print("Label:", sample["label"].item())
+    print("Frame dtype:", sample["frames"].dtype)
+    print("Audio dtype:", sample["audio"].dtype)
     print(
+        "Audio min/max:",
         sample["audio"].min().item(),
-        sample["audio"].max().item()
+        sample["audio"].max().item(),
     )
-
-    print()
     print("=" * 60)
     print("DATASET LOADER TEST SUCCESSFUL")
     print("=" * 60)
