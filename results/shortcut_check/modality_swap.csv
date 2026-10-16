@@ -1,0 +1,17 @@
+fake type,manipulation in input,model input,samples,predicted_fake,mean_probability
+audio only,no,source real video (control),200,0.0,0.0002
+audio only,no,fake video as-is,200,0.965,0.965
+audio only,no,fake frames + real audio,200,0.965,0.965
+audio only,no,real frames + fake audio,200,0.0,0.0002
+audio only,yes,source real video (control),200,0.0,0.0005
+audio only,yes,fake video as-is,200,0.97,0.9575
+audio only,yes,fake frames + real audio,200,0.97,0.9575
+audio only,yes,real frames + fake audio,200,0.0,0.0005
+video only,no,source real video (control),200,0.0,0.0002
+video only,no,fake video as-is,200,0.98,0.9726
+video only,no,fake frames + real audio,200,0.98,0.9726
+video only,no,real frames + fake audio,200,0.0,0.0002
+video only,yes,source real video (control),200,0.005,0.0038
+video only,yes,fake video as-is,200,0.985,0.9804
+video only,yes,fake frames + real audio,200,0.985,0.9804
+video only,yes,real frames + fake audio,200,0.005,0.0038

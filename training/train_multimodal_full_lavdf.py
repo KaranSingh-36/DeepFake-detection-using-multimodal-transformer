@@ -65,10 +65,23 @@ USE_AMP = torch.cuda.is_available()
 BENCHMARK_TRAIN_BATCHES = 500
 BENCHMARK_VAL_BATCHES = 100
 
+DATASET_ROOT = r"C:\AI_DATA\LAV-DF\LAV-DF"
+
 CHECKPOINT_DIR = os.path.join(
     PROJECT_ROOT,
     "results",
     "checkpoints",
+)
+
+# A resumable checkpoint is written every SAVE_EVERY_BATCHES training
+# batches, so a crash, sleep or reboot during the multi-day run costs
+# at most that many batches. Start the script again to continue.
+# Delete RESUME_PATH to start from scratch.
+SAVE_EVERY_BATCHES = 2000
+
+RESUME_PATH = os.path.join(
+    CHECKPOINT_DIR,
+    "multimodal_full_lavdf_last.pth",
 )
 
 RESULTS_DIR = os.path.join(
@@ -95,13 +108,27 @@ def seed_everything():
     torch.set_float32_matmul_precision("high")
 
 
-def make_loader(dataset, shuffle):
+def epoch_order(dataset_size, epoch):
+    """Shuffled sample order that is identical when an epoch is resumed."""
+    generator = torch.Generator().manual_seed(SEED + epoch)
+
+    return torch.randperm(
+        dataset_size,
+        generator=generator,
+    ).tolist()
+
+
+def make_loader(dataset, shuffle, indices=None):
     kwargs = {
         "batch_size": BATCH_SIZE,
         "shuffle": shuffle,
         "num_workers": NUM_WORKERS,
         "pin_memory": PIN_MEMORY,
     }
+
+    if indices is not None:
+        kwargs["shuffle"] = False
+        kwargs["sampler"] = indices
 
     if NUM_WORKERS > 0:
         kwargs["persistent_workers"] = PERSISTENT_WORKERS
@@ -136,25 +163,53 @@ def train_one_epoch(
     optimizer,
     scaler,
     max_batches=None,
+    progress=None,
+    save_progress=None,
 ):
+    """
+    progress: running totals of a partly finished epoch (when resuming).
+    save_progress: called with the running totals every
+    SAVE_EVERY_BATCHES batches.
+    """
     model.train()
 
-    running_loss = torch.zeros(
+    progress = progress or {}
+
+    running_loss = torch.full(
         (),
+        float(progress.get("loss_sum", 0.0)),
         device=DEVICE,
     )
 
-    correct = torch.zeros(
+    correct = torch.full(
         (),
+        int(progress.get("correct", 0)),
         dtype=torch.long,
         device=DEVICE,
     )
 
-    sample_count = 0
-    processed_batches = 0
+    sample_count = progress.get("samples", 0)
+    processed_batches = progress.get("batches", 0)
+    start_batches = processed_batches
 
-    data_wait_seconds = 0.0
-    compute_seconds = 0.0
+    data_wait_seconds = progress.get("data_wait_seconds", 0.0)
+    compute_seconds = progress.get("compute_seconds", 0.0)
+
+    total_batches = (
+        max_batches
+        if max_batches is not None
+        else start_batches + len(loader)
+    )
+
+    def current_progress():
+        return {
+            "batches": processed_batches,
+            "loss_sum": running_loss.item(),
+            "correct": correct.item(),
+            "samples": sample_count,
+            "data_wait_seconds": data_wait_seconds,
+            "compute_seconds": compute_seconds,
+        }
 
     optimizer.zero_grad(
         set_to_none=True,
@@ -290,7 +345,7 @@ def train_one_epoch(
                 print(
                     f"Batch "
                     f"{processed_batches:,}/"
-                    f"{max_batches if max_batches is not None else len(loader):,} | "
+                    f"{total_batches:,} | "
                     f"Loss: "
                     f"{current_loss:.4f} | "
                     f"Accuracy: "
@@ -310,10 +365,22 @@ def train_one_epoch(
                     f"{current_accuracy:.2f}%"
                 )
 
+        # should_step keeps the save on an optimizer-step boundary,
+        # so no accumulated gradient is lost on resume.
+        if (
+            save_progress is not None
+            and should_step
+            and processed_batches % SAVE_EVERY_BATCHES == 0
+        ):
+
+            save_progress(
+                current_progress()
+            )
+
     # Apply remaining accumulated gradients if the processed
     # batch count is not divisible by accumulation steps.
     if (
-        processed_batches > 0
+        processed_batches > start_batches
         and processed_batches
         % GRADIENT_ACCUMULATION_STEPS
         != 0
@@ -353,6 +420,7 @@ def train_one_epoch(
         "samples": sample_count,
         "data_wait_seconds": data_wait_seconds,
         "compute_seconds": compute_seconds,
+        "progress": current_progress(),
     }
 
 
@@ -625,6 +693,99 @@ def save_checkpoint(
     )
 
 
+def save_resume_state(
+    model,
+    optimizer,
+    scaler,
+    epoch,
+    progress,
+    training_seconds,
+    history,
+    best_val_auc,
+    best_val_f1,
+):
+    """
+    epoch: index of the epoch in progress.
+    progress: running totals of that epoch (None = not started yet).
+    """
+    temporary_path = RESUME_PATH + ".tmp"
+
+    torch.save(
+        {
+            "run_mode": RUN_MODE,
+            "batch_size": BATCH_SIZE,
+            "epoch": epoch,
+            "progress": progress,
+            "training_seconds": training_seconds,
+            "history": history,
+            "best_val_auc": best_val_auc,
+            "best_val_f1": best_val_f1,
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+
+            "scaler_state_dict":
+                scaler.state_dict()
+                if scaler is not None
+                else None,
+        },
+        temporary_path,
+    )
+
+    # Replace only after the write finished, so a crash while saving
+    # cannot leave a truncated resume file behind.
+    os.replace(
+        temporary_path,
+        RESUME_PATH,
+    )
+
+
+def load_resume_state(
+    model,
+    optimizer,
+    scaler,
+):
+    if not os.path.isfile(RESUME_PATH):
+        return None
+
+    state = torch.load(
+        RESUME_PATH,
+        map_location=DEVICE,
+        weights_only=False,
+    )
+
+    if (
+        state["run_mode"] != RUN_MODE
+        or state["batch_size"] != BATCH_SIZE
+    ):
+
+        raise RuntimeError(
+            "Resume checkpoint was written with different settings "
+            f"(run mode '{state['run_mode']}', "
+            f"batch size {state['batch_size']}).\n"
+            "Delete it to start a new run:\n"
+            f"{RESUME_PATH}"
+        )
+
+    model.load_state_dict(
+        state["model_state_dict"]
+    )
+
+    optimizer.load_state_dict(
+        state["optimizer_state_dict"]
+    )
+
+    if (
+        scaler is not None
+        and state["scaler_state_dict"] is not None
+    ):
+
+        scaler.load_state_dict(
+            state["scaler_state_dict"]
+        )
+
+    return state
+
+
 def main():
 
     seed_everything()
@@ -706,7 +867,7 @@ def main():
 
     train_dataset = LAVDFDataset(
         metadata_csv="metadata/lavdf_metadata.csv",
-        dataset_root=r"C:\AI_DATA\LAV-DF\LAV-DF",
+        dataset_root=DATASET_ROOT,
         split="train",
         num_frames=NUM_FRAMES,
         image_size=IMAGE_SIZE,
@@ -716,7 +877,7 @@ def main():
 
     dev_dataset = LAVDFDataset(
         metadata_csv="metadata/lavdf_metadata.csv",
-        dataset_root=r"C:\AI_DATA\LAV-DF\LAV-DF",
+        dataset_root=DATASET_ROOT,
         split="dev",
         num_frames=NUM_FRAMES,
         image_size=IMAGE_SIZE,
@@ -800,11 +961,8 @@ def main():
     print("CREATING DATALOADERS")
     print("=" * 80)
 
-    train_loader = make_loader(
-        train_dataset,
-        shuffle=True,
-    )
-
+    # The training loader is rebuilt every epoch from epoch_order(),
+    # which is what makes a partly finished epoch resumable.
     val_loader = make_loader(
         dev_dataset,
         shuffle=False,
@@ -812,7 +970,7 @@ def main():
 
     print(
         f"Training batches: "
-        f"{len(train_loader):,}"
+        f"{-(-len(train_dataset) // BATCH_SIZE):,}"
     )
 
     print(
@@ -897,6 +1055,39 @@ def main():
     best_val_auc = -1.0
     best_val_f1 = -1.0
 
+    start_epoch = 0
+    resume_progress = None
+    resume_training_seconds = 0.0
+
+    resume_state = load_resume_state(
+        model,
+        optimizer,
+        scaler,
+    )
+
+    if resume_state is not None:
+
+        start_epoch = resume_state["epoch"]
+        resume_progress = resume_state["progress"]
+        resume_training_seconds = resume_state["training_seconds"]
+        history = resume_state["history"]
+        best_val_auc = resume_state["best_val_auc"]
+        best_val_f1 = resume_state["best_val_f1"]
+
+        print("=" * 80)
+        print("RESUMING FROM CHECKPOINT")
+        print("=" * 80)
+        print(RESUME_PATH)
+
+        print(
+            f"Epoch: "
+            f"{start_epoch + 1} | "
+            f"Batches already done: "
+            f"{(resume_progress or {}).get('batches', 0):,}"
+        )
+
+        del resume_state
+
     total_start = time.perf_counter()
 
     # ============================================================
@@ -904,7 +1095,8 @@ def main():
     # ============================================================
 
     for epoch in range(
-        epochs_to_run
+        start_epoch,
+        epochs_to_run,
     ):
 
         print()
@@ -918,6 +1110,50 @@ def main():
 
         epoch_start = time.perf_counter()
 
+        if epoch == start_epoch:
+
+            epoch_progress = resume_progress
+            earlier_training_seconds = resume_training_seconds
+
+        else:
+
+            epoch_progress = None
+            earlier_training_seconds = 0.0
+
+        batches_done = (
+            epoch_progress or {}
+        ).get("batches", 0)
+
+        train_loader = make_loader(
+            train_dataset,
+            shuffle=True,
+            indices=epoch_order(
+                len(train_dataset),
+                epoch,
+            )[batches_done * BATCH_SIZE:],
+        )
+
+        def save_progress(progress):
+
+            save_resume_state(
+                model,
+                optimizer,
+                scaler,
+                epoch,
+                progress,
+                earlier_training_seconds
+                + time.perf_counter()
+                - epoch_start,
+                history,
+                best_val_auc,
+                best_val_f1,
+            )
+
+            print(
+                f"Resume checkpoint saved at batch "
+                f"{progress['batches']:,}"
+            )
+
         train_stats = train_one_epoch(
             model=model,
             loader=train_loader,
@@ -925,11 +1161,28 @@ def main():
             optimizer=optimizer,
             scaler=scaler,
             max_batches=max_train,
+            progress=epoch_progress,
+            save_progress=save_progress,
         )
 
         epoch_training_time = (
-            time.perf_counter()
+            earlier_training_seconds
+            + time.perf_counter()
             - epoch_start
+        )
+
+        # Training of this epoch is complete: a crash during the long
+        # validation pass resumes straight at validation.
+        save_resume_state(
+            model,
+            optimizer,
+            scaler,
+            epoch,
+            train_stats["progress"],
+            epoch_training_time,
+            history,
+            best_val_auc,
+            best_val_f1,
         )
 
         print()
@@ -1262,6 +1515,19 @@ def main():
                 indent=4,
             )
 
+        # Epoch fully finished: the next start begins the next epoch.
+        save_resume_state(
+            model,
+            optimizer,
+            scaler,
+            epoch + 1,
+            None,
+            0.0,
+            history,
+            best_val_auc,
+            best_val_f1,
+        )
+
         # ========================================================
         # GPU MEMORY
         # ========================================================
@@ -1311,6 +1577,10 @@ def main():
         time.perf_counter()
         - total_start
     )
+
+    # The run is complete, so the next start should be a fresh run.
+    if os.path.isfile(RESUME_PATH):
+        os.remove(RESUME_PATH)
 
     print()
     print("=" * 80)
