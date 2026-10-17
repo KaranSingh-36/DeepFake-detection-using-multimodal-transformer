@@ -1,9 +1,20 @@
+# Core pipeline (fusiontrace/, scripts/)
+torch>=2.2
+torchaudio
+transformers>=4.40
 numpy
 pandas
-opencv-python
+opencv-python>=4.8        # YuNet face detector needs >= 4.5.4; works with OpenCV 5
+scikit-learn
+pyyaml
+matplotlib
 tqdm
-librosa
-soundfile
-torch
-torchvision
-torchaudio
+imageio-ffmpeg            # bundled ffmpeg binary, used only when ffmpeg is not on PATH
+
+# Tests
+pytest
+
+# Legacy scripts only (legacy/)
+# streamlit
+# librosa
+# soundfile

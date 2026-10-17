@@ -15,6 +15,7 @@ Outputs:
 
 import os
 import json
+import ast
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -32,7 +33,7 @@ METADATA_FILE = (
     "metadata/lavdf_metadata.csv"
 )
 
-OUTPUT_DIR = "results/error_analysis"
+OUTPUT_DIR = "results/error_analysis_v2"
 
 
 # ============================================================
@@ -138,6 +139,7 @@ REAL_PROB_COL = find_column(
 FAKE_PROB_COL = find_column(
     pred,
     [
+        "deepfake_probability",
         "fake_probability",
         "fake_prob",
         "prob_fake",
@@ -425,9 +427,31 @@ if (
     print("ERROR RATE BY MODALITY")
     print("=" * 80)
 
+    def normalize_binary(value):
+        if pd.isna(value):
+            return np.nan
+        if isinstance(value, bool):
+            return int(value)
+        value = str(value).strip().lower()
+        if value in {"1", "1.0", "true", "yes"}:
+            return 1
+        if value in {"0", "0.0", "false", "no"}:
+            return 0
+        try:
+            value = float(value)
+            if value in (0, 1):
+                return int(value)
+        except Exception:
+            pass
+        return np.nan
+
+    # Normalize BEFORE grouping.
+    df["modify_video_norm"] = df["modify_video"].apply(normalize_binary)
+    df["modify_audio_norm"] = df["modify_audio"].apply(normalize_binary)
+
     modality_df = (
         df.groupby(
-            ["modify_video", "modify_audio"],
+            ["modify_video_norm", "modify_audio_norm"],
             dropna=False
         )
         .agg(
@@ -438,65 +462,43 @@ if (
     )
 
     modality_df["errors"] = (
-        modality_df["total_samples"] -
-        modality_df["correct"]
+        modality_df["total_samples"] - modality_df["correct"]
     )
-
     modality_df["accuracy"] = (
-        modality_df["correct"] /
-        modality_df["total_samples"]
+        modality_df["correct"] / modality_df["total_samples"]
     )
-
     modality_df["error_rate"] = (
-        modality_df["errors"] /
-        modality_df["total_samples"]
+        modality_df["errors"] / modality_df["total_samples"]
     )
 
-    def modality_name(row):
-
-        video = row["modify_video"]
-        audio = row["modify_audio"]
-
-        if video is True and audio is True:
+    def modality_name_from_values(row):
+        video = row["modify_video_norm"]
+        audio = row["modify_audio_norm"]
+        if pd.isna(video) or pd.isna(audio):
+            return "Unknown"
+        if int(video) == 1 and int(audio) == 1:
             return "Video + Audio"
-
-        if video is True and audio is False:
+        if int(video) == 1 and int(audio) == 0:
             return "Video only"
-
-        if video is False and audio is True:
+        if int(video) == 0 and int(audio) == 1:
             return "Audio only"
-
-        if video is False and audio is False:
-            return "Real / Unmodified"
-
-        return "Unknown"
+        return "Real / Unmodified"
 
     modality_df["modality"] = modality_df.apply(
-        modality_name,
-        axis=1
+        modality_name_from_values, axis=1
     )
 
     modality_df = modality_df[
-        [
-            "modality",
-            "total_samples",
-            "correct",
-            "errors",
-            "accuracy",
-            "error_rate"
-        ]
+        ["modality", "total_samples", "correct", "errors",
+         "accuracy", "error_rate"]
     ]
 
     print(modality_df.to_string(index=False))
 
     modality_df.to_csv(
-        os.path.join(
-            OUTPUT_DIR,
-            "error_by_modality.csv"
-        ),
+        os.path.join(OUTPUT_DIR, "error_by_modality.csv"),
         index=False
     )
-
 
 # ============================================================
 # ANALYSIS BY NUMBER OF FAKE PERIODS
@@ -625,91 +627,85 @@ if "duration" in df.columns:
 # CONFIDENCE ANALYSIS
 # ============================================================
 
+# The evaluator stores P(DEEPFAKE), so a real-probability column is not required.
 confidence_available = (
-    REAL_PROB_COL is not None and
-    FAKE_PROB_COL is not None
+    FAKE_PROB_COL is not None or REAL_PROB_COL is not None
 )
 
 if confidence_available:
+    if FAKE_PROB_COL is not None:
+        df["fake_probability"] = pd.to_numeric(df[FAKE_PROB_COL], errors="coerce")
+        df["real_probability"] = 1.0 - df["fake_probability"]
+    else:
+        df["real_probability"] = pd.to_numeric(df[REAL_PROB_COL], errors="coerce")
+        df["fake_probability"] = 1.0 - df["real_probability"]
 
-    df["real_probability"] = pd.to_numeric(
-        df[REAL_PROB_COL],
-        errors="coerce"
-    )
+    df["prediction_confidence"] = df[["real_probability", "fake_probability"]].max(axis=1)
 
-    df["fake_probability"] = pd.to_numeric(
-        df[FAKE_PROB_COL],
-        errors="coerce"
-    )
-
-    df["prediction_confidence"] = df[
-        ["real_probability", "fake_probability"]
-    ].max(axis=1)
-
-    # Confidence of incorrect predictions
     errors = df[~df["correct"]].copy()
 
     print("\n" + "=" * 80)
     print("INCORRECT PREDICTION CONFIDENCE")
     print("=" * 80)
-
     if len(errors) > 0:
+        print(f"Mean confidence : {errors['prediction_confidence'].mean():.4f}")
+        print(f"Max confidence  : {errors['prediction_confidence'].max():.4f}")
+        print(f"Min confidence  : {errors['prediction_confidence'].min():.4f}")
 
-        print(
-            f"Mean confidence : "
-            f"{errors['prediction_confidence'].mean():.4f}"
-        )
+    hardest_errors = errors.sort_values("prediction_confidence", ascending=False)
+    hardest_errors.to_csv(os.path.join(OUTPUT_DIR, "highest_confidence_errors.csv"), index=False)
 
-        print(
-            f"Max confidence  : "
-            f"{errors['prediction_confidence'].max():.4f}"
-        )
+    fn_conf = df[(df["true_label_norm"] == 1) & (df["pred_label_norm"] == 0)].copy()
+    fn_conf = fn_conf.sort_values("fake_probability", ascending=True)
+    fn_conf.to_csv(os.path.join(OUTPUT_DIR, "highest_confidence_false_negatives.csv"), index=False)
 
-        print(
-            f"Min confidence  : "
-            f"{errors['prediction_confidence'].min():.4f}"
-        )
+    fp_conf = df[(df["true_label_norm"] == 0) & (df["pred_label_norm"] == 1)].copy()
+    fp_conf = fp_conf.sort_values("fake_probability", ascending=False)
+    fp_conf.to_csv(os.path.join(OUTPUT_DIR, "highest_confidence_false_positives.csv"), index=False)
 
-    # Save hardest errors
-    hardest_errors = (
-        errors
-        .sort_values(
-            "prediction_confidence",
-            ascending=False
-        )
+    uncertain = df[(df["prediction_confidence"] >= 0.50) & (df["prediction_confidence"] <= 0.60)].copy()
+    uncertain.to_csv(os.path.join(OUTPUT_DIR, "uncertain_predictions.csv"), index=False)
+
+    print(f"Highest-confidence errors saved: {len(hardest_errors):,}")
+    print(f"Highest-confidence false negatives saved: {len(fn_conf):,}")
+    print(f"Highest-confidence false positives saved: {len(fp_conf):,}")
+    print(f"Uncertain predictions saved: {len(uncertain):,}")
+
+# ============================================================
+# FAKE-PERIOD COUNT ANALYSIS
+# ============================================================
+
+if "fake_periods" in df.columns:
+    def parse_fake_period_count(value):
+        if pd.isna(value):
+            return 0
+        text = str(value).strip()
+        if text in {"", "[]", "None", "nan", "null"}:
+            return 0
+        try:
+            parsed = json.loads(text)
+            return len(parsed) if isinstance(parsed, list) else 0
+        except Exception:
+            try:
+                parsed = ast.literal_eval(text)
+                return len(parsed) if isinstance(parsed, list) else 0
+            except Exception:
+                return 0
+
+    df["fake_period_count"] = df["fake_periods"].apply(parse_fake_period_count)
+    fake_period_df = (
+        df.groupby("fake_period_count", dropna=False)
+        .agg(total_samples=("correct", "size"), correct=("correct", "sum"))
+        .reset_index()
     )
-
-    hardest_errors.to_csv(
-        os.path.join(
-            OUTPUT_DIR,
-            "highest_confidence_errors.csv"
-        ),
-        index=False
-    )
-
-    # Save uncertain predictions
-    uncertain = df[
-        (df["prediction_confidence"] >= 0.40) &
-        (df["prediction_confidence"] <= 0.60)
-    ].copy()
-
-    uncertain.to_csv(
-        os.path.join(
-            OUTPUT_DIR,
-            "uncertain_predictions.csv"
-        ),
-        index=False
-    )
-
-    print(
-        f"Highest-confidence errors saved: "
-        f"{len(hardest_errors):,}"
-    )
-
-    print(
-        f"Uncertain predictions saved: "
-        f"{len(uncertain):,}"
-    )
+    fake_period_df["errors"] = fake_period_df["total_samples"] - fake_period_df["correct"]
+    fake_period_df["accuracy"] = fake_period_df["correct"] / fake_period_df["total_samples"]
+    fake_period_df["error_rate"] = fake_period_df["errors"] / fake_period_df["total_samples"]
+    fake_period_df.to_csv(os.path.join(OUTPUT_DIR, "error_by_fake_period_count.csv"), index=False)
+    print("\n" + "=" * 80)
+    print("ERROR RATE BY PARSED FAKE-PERIOD COUNT")
+    print("=" * 80)
+    print(fake_period_df.to_string(index=False))
 
 
 # ============================================================
@@ -1034,6 +1030,9 @@ print("  error_by_modality.csv")
 print("  error_by_fake_segments.csv")
 print("  error_by_duration.csv")
 print("  highest_confidence_errors.csv")
+print("  highest_confidence_false_negatives.csv")
+print("  highest_confidence_false_positives.csv")
+print("  error_by_fake_period_count.csv")
 print("  uncertain_predictions.csv")
 print("  error_analysis_summary.json")
 

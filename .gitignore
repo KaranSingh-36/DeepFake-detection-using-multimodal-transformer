@@ -21,3 +21,8 @@ results/test/
 # Notebook and tooling noise
 .ipynb_checkpoints/
 .vscode/
+# FusionTrace outputs
+results/runs/
+results/eval/
+dashboard/runtime/
+.pytest_cache/

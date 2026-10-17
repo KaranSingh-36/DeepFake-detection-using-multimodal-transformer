@@ -1,21 +1,25 @@
+"""Convert LAV-DF metadata.min.json into metadata/lavdf_metadata.csv.
+
+The dataset location is taken from --dataset-root, $LAVDF_ROOT or the known
+default locations (see fusiontrace/paths.py).
+"""
+
+import argparse
 import json
+import sys
 from pathlib import Path
 import pandas as pd
 
-
-# ============================================================
-# LAV-DF METADATA CONFIGURATION
-# ============================================================
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
-METADATA_PATH = (
-    PROJECT_ROOT
-    / "datasets"
-    / "LAV-DF"
-    / "LAV-DF"
-    / "metadata.min.json"
-)
+from fusiontrace.paths import resolve_dataset_root  # noqa: E402
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--dataset-root", default=None)
+args = parser.parse_args()
+
+METADATA_PATH = resolve_dataset_root(args.dataset_root) / "metadata.min.json"
 
 OUTPUT_PATH = (
     PROJECT_ROOT

@@ -1,0 +1,10 @@
+# Tiny end-to-end check. Use with scripts/make_smoke_data.py or a few real clips.
+data:
+  cache_dir: data/features_smoke
+train:
+  epochs: 3
+  windows_per_epoch: 256
+  batch_size: 16
+  num_workers: 0
+  max_dev_videos: 50
+  lr: 0.0005

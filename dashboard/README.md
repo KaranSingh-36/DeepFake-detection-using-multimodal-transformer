@@ -1,21 +1,23 @@
-# DeepGuard dashboard
+# FusionTrace dashboard
 
-This is a local-only dashboard for the trained multimodal checkpoint. It is
-intentionally isolated from the training and evaluation files.
-
-## Start
-
-From the project root:
+Local-only web page for the trained window-level model. Upload a clip and get
+the verdict, a timeline of the fused / video / audio heads over the whole clip,
+the flagged segments with their modality, and thumbnails as evidence.
 
 ```powershell
-.\.venv\Scripts\python.exe .\dashboard\app.py
+python dashboard\app.py                                   # results/runs/latest/best.pt
+python dashboard\app.py --checkpoint results\runs\<run>\best.pt --port 8501
 ```
 
-Then open <http://127.0.0.1:8501>.
+Then open <http://127.0.0.1:8501>. FFmpeg must be on `PATH` (or `pip install imageio-ffmpeg`).
 
-The dashboard uses the existing checkpoint
-`results/checkpoints/multimodal_25000_2epoch_epoch_2.pth`, samples 8 video
-frames, extracts the first 4 seconds of mono 16 kHz audio, and runs the same
-multimodal model used by the evaluation script. FFmpeg must be available on
-`PATH`. These fixed inputs match the checkpoint's training and evaluation
-configuration.
+JSON API for other front ends (CORS enabled):
+
+| Method | Path                     | Body / result                                   |
+| ------ | ------------------------ | ----------------------------------------------- |
+| POST   | `/api/upload`            | multipart field `video` -> `{"run_id": ...}`    |
+| GET    | `/api/status/<run_id>`   | `{status, stage, progress, result?}`            |
+| GET    | `/runs/<run_id>/<file>`  | thumbnails, `timeline.png`, `result.json`       |
+
+`result` is the dictionary produced by `fusiontrace.inference.VideoAnalyzer.analyze`
+(label, video_score, segments, per-window probabilities, curves).
