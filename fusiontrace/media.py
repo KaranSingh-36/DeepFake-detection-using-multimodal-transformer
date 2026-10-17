@@ -6,7 +6,9 @@ import subprocess
 import cv2
 import numpy as np
 
-from fusiontrace.faces import crop_and_resize, stable_face_box
+from fusiontrace.faces import crop_and_resize, stable_face_box, stable_mouth_box
+
+VISUAL_STREAMS = ("face", "mouth")
 
 _FFMPEG = None
 
@@ -74,12 +76,11 @@ def _target_frame_indices(src_fps, src_count, target_fps, start=0.0, duration=No
     return indices, times
 
 
-def read_frames(path, target_fps, image_size=224, face_crop=True, start=0.0,
-                duration=None, max_side=720):
-    """Decode frames at `target_fps` and return (uint8 [N, S, S, 3], times [N]).
+def _decode_frames(path, target_fps, start=0.0, duration=None, max_side=720):
+    """Decode frames at `target_fps` -> (list of HxWx3 uint8 RGB, times [N]).
 
     Frames are decoded sequentially once; only the wanted indices are
-    converted. Large frames are downscaled to `max_side` before cropping.
+    converted. Large frames are downscaled to `max_side`.
     """
     info = probe_video(path)
     indices, times = _target_frame_indices(
@@ -138,7 +139,38 @@ def read_frames(path, target_fps, image_size=224, face_crop=True, start=0.0,
     for k in range(1, len(frames)):
         if frames[k] is None:
             frames[k] = frames[k - 1]
+    return frames, times.astype(np.float32)
 
+
+def read_frames(path, target_fps, image_size=224, face_crop=True, start=0.0,
+                duration=None, max_side=720):
+    """Face-cropped frames at `target_fps` -> (uint8 [N, S, S, 3], times [N])."""
+    frames, times = _decode_frames(path, target_fps, start, duration, max_side)
     box = stable_face_box(frames) if face_crop else None
-    array = crop_and_resize(frames, box, image_size)
-    return array, times.astype(np.float32)
+    return crop_and_resize(frames, box, image_size), times
+
+
+def read_frame_streams(path, target_fps, image_size=224, face_crop=True, streams=VISUAL_STREAMS,
+                       start=0.0, duration=None, max_side=720):
+    """Decode once and return every requested visual stream.
+
+    -> ({"face": uint8 [N, S, S, 3], "mouth": uint8 [N, S, S, 3]}, times [N])
+
+    "face"  : the frame, cropped to the face when one is found (or as-is).
+    "mouth" : the lower-face region of the face stream (see faces.stable_mouth_box),
+              resized to the same size, so the encoder sees lip-sync artefacts at
+              full resolution.
+    """
+    frames, times = _decode_frames(path, target_fps, start, duration, max_side)
+    box = stable_face_box(frames) if face_crop else None
+    face = crop_and_resize(frames, box, image_size)
+    out = {}
+    for name in streams:
+        if name == "face":
+            out[name] = face
+        elif name == "mouth":
+            mouth_box = stable_mouth_box(list(face))
+            out[name] = crop_and_resize(face, mouth_box, image_size)
+        else:
+            raise ValueError(f"unknown visual stream {name!r}; choose from {VISUAL_STREAMS}")
+    return out, times

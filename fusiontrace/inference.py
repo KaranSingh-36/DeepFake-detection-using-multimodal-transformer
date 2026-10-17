@@ -38,11 +38,16 @@ class VideoAnalyzer:
 
     def extract_features(self, video_path, keep_frames=False):
         clip = decode_clip(video_path, self.manifest["visual_fps"], self.manifest["image_size"],
-                           self.manifest["face_crop"], self.manifest["sample_rate"])
+                           self.manifest["face_crop"], self.manifest["sample_rate"],
+                           visual_streams=self.manifest.get("visual_streams", ["face"]))
         features = encode_clip(self.encoders, clip, self.manifest["visual_fps"], self.device,
                                audio_chunk_seconds=self.manifest["audio_chunk_seconds"],
                                audio_hop_seconds=self.manifest["audio_hop_seconds"])
         features["has_audio"] = clip["has_audio"]
+        if not clip["has_audio"]:
+            # Same representation of "no audio" as modality dropout used in training:
+            # zero features, so the fused head falls back to the visual evidence.
+            features["audio"] = np.zeros_like(features["audio"])
         if keep_frames:
             features["frames"] = clip["frames"]
         return features

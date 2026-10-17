@@ -24,7 +24,13 @@ def safe_ap(y_true, scores):
 
 
 def best_threshold(y_true, scores, metric="balanced_accuracy"):
-    """Threshold maximising balanced accuracy on (y_true, scores)."""
+    """Threshold maximising `metric` ("balanced_accuracy" or "f1") on (y_true, scores).
+
+    Balanced accuracy suits the clip decision (both error types matter equally).
+    F1 suits the per-step segment threshold: fake steps are under 10 % of the
+    frames, and balanced accuracy there picks a very low threshold that produces
+    many spurious short segments.
+    """
     y_true = np.asarray(y_true).astype(int)
     scores = np.asarray(scores, dtype=np.float64)
     if len(np.unique(y_true)) < 2:
@@ -38,7 +44,10 @@ def best_threshold(y_true, scores, metric="balanced_accuracy"):
     fp = np.cumsum(1 - sorted_y)
     tpr = tp / max(positives, 1)
     tnr = 1.0 - fp / max(negatives, 1)
-    balanced = (tpr + tnr) / 2.0
+    if metric == "f1":
+        balanced = 2 * tp / np.maximum(2 * tp + fp + (positives - tp), 1)
+    else:
+        balanced = (tpr + tnr) / 2.0
     # only consider cut points between distinct scores
     distinct = np.r_[sorted_scores[1:] != sorted_scores[:-1], True]
     balanced = np.where(distinct, balanced, -1.0)

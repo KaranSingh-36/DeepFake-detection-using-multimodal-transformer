@@ -31,7 +31,8 @@ from fusiontrace.config import load_config, save_config
 from fusiontrace.data import CachedWindowDataset, RawWindowDataset, WindowTable, make_balanced_sampler
 from fusiontrace.evaluation import localisation, score_videos, summarize
 from fusiontrace.features import build_encoders, cache_manifest
-from fusiontrace.model import EndToEndModel, WindowFusionModel, multitask_loss
+from fusiontrace.features import visual_streams_of
+from fusiontrace.model import EndToEndModel, WindowFusionModel, apply_modality_dropout, multitask_loss
 from fusiontrace.paths import project_path, resolve_dataset_root
 from fusiontrace.windows import load_metadata
 
@@ -92,6 +93,36 @@ def checkpoint_payload(cfg, manifest, model_kwargs, fusion_model, encoders, epoc
         "step_threshold": float(step_threshold),
         "saved_at": datetime.now().isoformat(timespec="seconds"),
     }
+
+
+def update_latest(run_dir, name, metric_name, metric_value, fusion, log):
+    """results/runs/latest/best.pt = the best checkpoint across runs.
+
+    Only cross-attention / concat runs (the models that use both modalities)
+    replace it, and only when their selection metric is at least as good as the
+    one recorded in latest/source.json. Unimodal ablations never become the
+    dashboard default.
+    """
+    latest = PROJECT_ROOT / "results" / "runs" / "latest"
+    info_path = latest / "source.json"
+    if fusion in ("video_only", "audio_only"):
+        return
+    if info_path.is_file():
+        try:
+            previous = json.loads(info_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            previous = {}
+        if previous.get("run") != name and previous.get("metric_name") == metric_name \
+                and float(previous.get("metric_value", -1.0)) > float(metric_value):
+            log(f"  results/runs/latest keeps run '{previous.get('run')}' ({metric_name}={previous.get('metric_value'):.4f})")
+            return
+    latest.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(run_dir / "best.pt", latest / "best.pt")
+    info_path.write_text(json.dumps({"run": name, "run_dir": str(run_dir), "fusion": fusion,
+                                     "metric_name": metric_name, "metric_value": float(metric_value),
+                                     "saved_at": datetime.now().isoformat(timespec="seconds")}, indent=2),
+                         encoding="utf-8")
+    log(f"  results/runs/latest/best.pt now points at run '{name}'")
 
 
 def main():
@@ -177,7 +208,8 @@ def main():
     else:
         dataset = RawWindowDataset(table, root, cfg.data.visual_fps, cfg.data.image_size,
                                    cfg.data.face_crop, cfg.data.sample_rate, cfg.window.jitter_seconds,
-                                   cfg.train.seed, audio_hz=encoders.audio_hz)
+                                   cfg.train.seed, audio_hz=encoders.audio_hz,
+                                   visual_streams=visual_streams_of(cfg))
         batch_size = int(cfg.train.raw_batch_size)
 
     windows_per_epoch = min(int(cfg.train.windows_per_epoch), max(len(table), 1) * 4)
@@ -228,6 +260,9 @@ def main():
         log(f"Resumed from {args.resume} at epoch {start_epoch}")
 
     loss_weights = dict(cfg.train.loss_weights)
+    modality_dropout = float(cfg.train.get("modality_dropout", 0.0))
+    dropout_generator = torch.Generator().manual_seed(int(cfg.train.seed) + 1)
+    log(f"Modality dropout: {modality_dropout:.2f} (share of windows that lose audio or video during training)")
     log_every = max(1, steps_per_epoch // 10)
 
     for epoch in range(start_epoch, int(cfg.train.epochs)):
@@ -239,6 +274,8 @@ def main():
             batch = {k: (v.to(device, non_blocking=True) if torch.is_tensor(v) else v) for k, v in batch.items()}
             with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=use_amp):
                 if source == "cache":
+                    if modality_dropout > 0.0:
+                        batch = apply_modality_dropout(batch, modality_dropout, dropout_generator)
                     outputs = model(batch["visual"], batch["audio"], batch["visual_mask"], batch["audio_mask"])
                 else:
                     outputs = model(batch["frames"], batch["waveform"])
@@ -302,11 +339,9 @@ def main():
             best_metric = metric_value
             best = {k: v for k, v in payload.items() if k not in ("optimizer_state_dict", "scheduler_state_dict")}
             torch.save(best, run_dir / "best.pt")
-            latest = PROJECT_ROOT / "results" / "runs" / "latest"
-            latest.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(run_dir / "best.pt", latest / "best.pt")
-            (latest / "source.txt").write_text(str(run_dir), encoding="utf-8")
             log(f"  new best {cfg.train.select_by}={metric_value:.4f} -> {run_dir / 'best.pt'}")
+            if bool(cfg.train.get("update_latest", True)):
+                update_latest(run_dir, name, cfg.train.select_by, metric_value, cfg.train.fusion, log)
 
     log(f"Done. Best {cfg.train.select_by}: {best_metric:.4f}. Run directory: {run_dir}")
     log_file.close()

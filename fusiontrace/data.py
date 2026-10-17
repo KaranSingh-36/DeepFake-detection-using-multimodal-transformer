@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, WeightedRandomSampler
 
-from fusiontrace.media import read_audio, read_frames
+from fusiontrace.media import read_audio, read_frame_streams
 from fusiontrace.windows import (
     CLASS_NAMES,
     enumerate_window_starts,
@@ -188,8 +188,10 @@ class CachedWindowDataset(Dataset):
 # ----------------------------------------------------------------------------
 class RawWindowDataset(Dataset):
     def __init__(self, table, dataset_root, visual_fps, image_size=224, face_crop=True,
-                 sample_rate=16000, jitter_seconds=0.0, seed=0, audio_hz=25.0):
+                 sample_rate=16000, jitter_seconds=0.0, seed=0, audio_hz=25.0,
+                 visual_streams=("face", "mouth")):
         self.audio_hz = float(audio_hz)
+        self.visual_streams = list(visual_streams)
         self.table = table
         self.root = dataset_root
         self.visual_fps = float(visual_fps)
@@ -215,13 +217,15 @@ class RawWindowDataset(Dataset):
                                    self.table.min_overlap_seconds, self.table.min_overlap_fraction)
 
         path = str(self.root / meta.file)
-        frames, _ = read_frames(path, self.visual_fps, image_size=self.image_size,
-                                face_crop=self.face_crop, start=start,
-                                duration=self.table.window_seconds)
+        streams, _ = read_frame_streams(path, self.visual_fps, image_size=self.image_size,
+                                        face_crop=self.face_crop, streams=self.visual_streams,
+                                        start=start, duration=self.table.window_seconds)
         count = max(1, int(round(self.table.window_seconds * self.visual_fps)))
-        if frames.shape[0] < count:
-            frames = np.concatenate([frames, np.repeat(frames[-1:], count - frames.shape[0], axis=0)])
-        frames = frames[:count]
+        frames = {}
+        for name, array in streams.items():
+            if array.shape[0] < count:
+                array = np.concatenate([array, np.repeat(array[-1:], count - array.shape[0], axis=0)])
+            frames[name] = torch.from_numpy(array[:count])      # uint8 [T, S, S, 3]
 
         samples = int(round(self.table.window_seconds * self.sample_rate))
         wave = read_audio(path, self.sample_rate, start=start, duration=self.table.window_seconds)
@@ -230,7 +234,7 @@ class RawWindowDataset(Dataset):
         wave = wave[:samples]
 
         item = {
-            "frames": torch.from_numpy(frames),            # uint8 [T, S, S, 3]
+            "frames": frames,                               # {"face": uint8 [T, S, S, 3], ...}
             "waveform": torch.from_numpy(wave.astype(np.float32)),
             "start": torch.tensor(start),
             "file": meta.file,

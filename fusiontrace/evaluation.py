@@ -251,7 +251,8 @@ def localisation(video_records, cfg, step_threshold=None, curve_key="step_fused"
     frame_truth = np.concatenate(frame_truth) if frame_truth else np.zeros(0)
     frame_scores = np.concatenate(frame_scores) if frame_scores else np.zeros(0)
     if step_threshold is None:
-        step_threshold = best_threshold(frame_truth, frame_scores) if len(frame_truth) else 0.5
+        metric = str(cfg.eval.get("step_threshold_metric", "f1"))
+        step_threshold = best_threshold(frame_truth, frame_scores, metric=metric) if len(frame_truth) else 0.5
 
     at_threshold = {rec["file"]: segments_from_curve(rec["step_times"], rec[curve_key], step_threshold, min_seg,
                                                      1.0 / float(rec["step_rate"])) for rec in video_records}

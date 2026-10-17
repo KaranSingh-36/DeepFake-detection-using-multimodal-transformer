@@ -187,10 +187,14 @@ class EndToEndModel(nn.Module):
         self.fusion_model = fusion
 
     def forward(self, frames_uint8, waveform, return_attention=False):
-        b, t = frames_uint8.shape[:2]
-        pixels = self.encoders.preprocess_frames(frames_uint8.flatten(0, 1))
-        visual = self.encoders.encode_frames(pixels).view(b, t, -1)
-        audio = self.encoders.encode_audio(waveform)
+        """frames_uint8: {"face": uint8 [B, T, S, S, 3], "mouth": ...} (or a single tensor)."""
+        if torch.is_tensor(frames_uint8):
+            frames_uint8 = {self.encoders.visual_streams[0]: frames_uint8}
+        device = self.encoders.image_mean.device
+        b, t = next(iter(frames_uint8.values())).shape[:2]
+        flat = {name: frames.to(device).flatten(0, 1) for name, frames in frames_uint8.items()}
+        visual = self.encoders.encode_visual(flat).view(b, t, -1)
+        audio = self.encoders.encode_audio(waveform.to(device))
         return self.fusion_model(visual, audio, None, None, return_attention=return_attention)
 
 
@@ -204,12 +208,61 @@ def _fit_length(target, length):
     return torch.cat([target, pad], dim=1)
 
 
+def apply_modality_dropout(batch, probability, generator=None):
+    """Zero one modality for a share of the windows and relabel the fused targets.
+
+    Without this the fused head can solve LAV-DF from audio alone and never
+    learns to use the frames. For each window, with probability `probability`
+    one modality is removed (half the time audio, half the time video): its
+    features are zeroed, the fused window / step targets become the labels of
+    the remaining modality, and `audio_present` / `video_present` flags tell
+    `multitask_loss` to skip the unimodal head of the missing modality.
+    """
+    batch = dict(batch)
+    n = batch["visual"].shape[0]
+    if probability <= 0.0:
+        return batch
+    u = torch.rand(n, generator=generator)
+    drop_audio = u < probability / 2.0
+    drop_video = (u >= probability / 2.0) & (u < probability)
+    device = batch["visual"].device
+    drop_audio, drop_video = drop_audio.to(device), drop_video.to(device)
+
+    if drop_audio.any():
+        audio = batch["audio"].clone()
+        audio[drop_audio] = 0
+        batch["audio"] = audio
+    if drop_video.any():
+        visual = batch["visual"].clone()
+        visual[drop_video] = 0
+        batch["visual"] = visual
+
+    y_video = batch["y_video"].float().to(device)
+    y_audio = batch["y_audio"].float().to(device)
+    y_any = batch["y_any"].float().to(device)
+    batch["y_any"] = torch.where(drop_audio, y_video, torch.where(drop_video, y_audio, y_any))
+    if "y_any_steps" in batch:
+        steps = batch["y_any_steps"].float().to(device)
+        keep = torch.where(drop_audio, y_video, torch.where(drop_video, y_audio, torch.ones_like(y_any)))
+        batch["y_any_steps"] = steps * keep.unsqueeze(1)
+        if "y_video_steps" in batch:
+            video_steps = _fit_length(batch["y_video_steps"].float().to(device), steps.shape[1])
+            batch["y_any_steps"] = torch.where(drop_audio.unsqueeze(1), video_steps, batch["y_any_steps"])
+    batch["audio_present"] = ~drop_audio
+    batch["video_present"] = ~drop_video
+    return batch
+
+
 def multitask_loss(outputs, batch, weights=None):
     """Masked BCE over the window heads and the step heads. Returns (total, parts)."""
     weights = {"video": 1.0, "audio": 1.0, "fused": 1.0, "steps": 1.0, **(weights or {})}
     parts = {}
     total = 0.0
     valid = (~batch["ambiguous"]).float() if "ambiguous" in batch else None
+
+    def present(name, device):
+        flag = batch.get(f"{name}_present")
+        return None if flag is None else flag.float().to(device)
 
     window_targets = {"video": "y_video", "audio": "y_audio", "fused": "y_any"}
     for name, target_key in window_targets.items():
@@ -218,20 +271,21 @@ def multitask_loss(outputs, batch, weights=None):
             continue
         target = batch[target_key].float().to(logit.device)
         loss = F.binary_cross_entropy_with_logits(logit.float(), target, reduction="none")
+        mask = torch.ones_like(loss)
         if valid is not None:
-            mask = valid.to(logit.device)
-            loss = (loss * mask).sum() / mask.sum().clamp(min=1.0)
-        else:
-            loss = loss.mean()
+            mask = mask * valid.to(logit.device)
+        if present(name, logit.device) is not None:
+            mask = mask * present(name, logit.device)
+        loss = (loss * mask).sum() / mask.sum().clamp(min=1.0)
         parts[name] = loss.detach()
         total = total + weights[name] * loss
 
     if weights.get("steps", 0.0) > 0.0:
-        step_specs = [("video_step_logit", "y_video_steps", "visual_mask"),
-                      ("audio_step_logit", "y_audio_steps", "audio_mask"),
-                      ("fused_step_logit", "y_any_steps", "visual_mask")]
+        step_specs = [("video_step_logit", "y_video_steps", "visual_mask", "video"),
+                      ("audio_step_logit", "y_audio_steps", "audio_mask", "audio"),
+                      ("fused_step_logit", "y_any_steps", "visual_mask", None)]
         step_losses = []
-        for logit_key, target_key, mask_key in step_specs:
+        for logit_key, target_key, mask_key, modality in step_specs:
             logit = outputs.get(logit_key)
             if logit is None or target_key not in batch:
                 continue
@@ -242,6 +296,8 @@ def multitask_loss(outputs, batch, weights=None):
                 mask = mask * _fit_length(batch[mask_key].float().to(logit.device), logit.shape[1])
             if valid is not None:
                 mask = mask * valid.to(logit.device).unsqueeze(1)
+            if modality is not None and present(modality, logit.device) is not None:
+                mask = mask * present(modality, logit.device).unsqueeze(1)
             step_losses.append((loss * mask).sum() / mask.sum().clamp(min=1.0))
         if step_losses:
             step_loss = torch.stack(step_losses).mean()

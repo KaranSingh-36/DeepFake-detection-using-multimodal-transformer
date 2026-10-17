@@ -3,19 +3,22 @@
 import numpy as np
 import torch
 
-from fusiontrace.media import probe_video, read_audio, read_frames
+from fusiontrace.media import VISUAL_STREAMS, probe_video, read_audio, read_frame_streams
 
 
-def decode_clip(video_path, visual_fps, image_size, face_crop, sample_rate=16000):
+def decode_clip(video_path, visual_fps, image_size, face_crop, sample_rate=16000,
+                visual_streams=VISUAL_STREAMS):
     """Decode everything the encoders need for a whole clip."""
     info = probe_video(video_path)
-    frames, _ = read_frames(video_path, visual_fps, image_size=image_size, face_crop=face_crop)
+    streams, _ = read_frame_streams(video_path, visual_fps, image_size=image_size,
+                                    face_crop=face_crop, streams=visual_streams)
     wave = read_audio(video_path, sample_rate)
     has_audio = wave.size > 0
     if not has_audio:
         wave = np.zeros(int(round(info["duration"] * sample_rate)), dtype=np.float32)
     return {
-        "frames": frames,                 # uint8 [Tv, S, S, 3]
+        "frames": streams["face"] if "face" in streams else next(iter(streams.values())),  # uint8 [Tv, S, S, 3]
+        "streams": streams,               # {"face": uint8 [Tv, S, S, 3], "mouth": ...}
         "waveform": wave,                 # float32 [S]
         "duration": float(info["duration"]),
         "has_audio": has_audio,
@@ -28,8 +31,7 @@ def encode_clip(encoders, clip, visual_fps, device, amp=True, audio_chunk_second
     """-> dict(visual float16 [Tv, Dv], audio float16 [L, Ta, Da], visual_fps, audio_hz, duration)."""
     use_amp = amp and device.type == "cuda"
     with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=use_amp):
-        pixels = encoders.preprocess_frames(torch.as_tensor(clip["frames"]).to(device))
-        visual = encoders.encode_frames(pixels)
+        visual = encoders.encode_visual(clip["streams"])
         wave = torch.as_tensor(clip["waveform"]).to(device)
         audio = encoders.encode_audio_long(wave, chunk_seconds=audio_chunk_seconds,
                                            hop_seconds=audio_hop_seconds)
@@ -42,6 +44,12 @@ def encode_clip(encoders, clip, visual_fps, device, amp=True, audio_chunk_second
     }
 
 
+def visual_streams_of(cfg):
+    """Configured visual streams; configs from before the mouth stream mean ["face"]."""
+    streams = cfg.data.get("visual_streams")
+    return list(streams) if streams else ["face"]
+
+
 def build_encoders(cfg, device, trainable_video_blocks=0, trainable_audio_blocks=0,
                    gradient_checkpointing=False):
     from fusiontrace.encoders import FrozenEncoders
@@ -51,6 +59,7 @@ def build_encoders(cfg, device, trainable_video_blocks=0, trainable_audio_blocks
         audio_model_name=cfg.encoders.audio_model_name,
         audio_layers=cfg.data.audio_layers,
         audio_pool=cfg.data.audio_pool,
+        visual_streams=visual_streams_of(cfg),
         trainable_video_blocks=trainable_video_blocks,
         trainable_audio_blocks=trainable_audio_blocks,
         gradient_checkpointing=gradient_checkpointing,

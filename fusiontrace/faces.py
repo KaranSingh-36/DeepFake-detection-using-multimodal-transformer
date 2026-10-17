@@ -55,8 +55,11 @@ def _detector():
     return _DETECTOR
 
 
-def detect_largest_face(frame_rgb):
-    """-> (x, y, w, h) of the highest-scoring face or None."""
+def detect_face(frame_rgb):
+    """-> (box (x, y, w, h), landmarks [5, 2]) of the highest-scoring face or None.
+
+    Landmarks: right eye, left eye, nose tip, right mouth corner, left mouth corner.
+    """
     detector = _detector()
     if detector is None:
         return None
@@ -65,8 +68,59 @@ def detect_largest_face(frame_rgb):
     _, faces = detector.detect(cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR))
     if faces is None or len(faces) == 0:
         return None
-    x, y, w, h = faces[np.argmax(faces[:, -1])][:4]
-    return float(x), float(y), float(w), float(h)
+    best = faces[np.argmax(faces[:, -1])]
+    box = tuple(float(v) for v in best[:4])
+    landmarks = best[4:14].reshape(5, 2).astype(np.float32)
+    return box, landmarks
+
+
+def detect_largest_face(frame_rgb):
+    """-> (x, y, w, h) of the highest-scoring face or None."""
+    found = detect_face(frame_rgb)
+    return None if found is None else found[0]
+
+
+def default_mouth_box(width, height):
+    """Lower-centre region, used when no landmarks are found (x 20-80 %, y 50-100 %)."""
+    return int(round(0.2 * width)), int(round(0.5 * height)), int(round(0.8 * width)), height
+
+
+def stable_mouth_box(frames, max_probe=5, scale=2.2, min_fraction=0.35, max_fraction=0.7):
+    """Square box around the mouth, median over up to `max_probe` frames.
+
+    Lip-sync manipulations (LAV-DF uses Wav2Lip) only change the lower face, so a
+    second visual stream looks at this region at full ViT resolution. The side
+    is `scale` times the mouth width, clamped between `min_fraction` and
+    `max_fraction` of the frame size. Falls back to `default_mouth_box` when
+    landmarks are missing on most probe frames.
+    """
+    if len(frames) == 0:
+        return None
+    height, width = frames[0].shape[:2]
+    fallback = default_mouth_box(width, height)
+    if _detector() is None:
+        return fallback
+    probe = np.linspace(0, len(frames) - 1, min(max_probe, len(frames))).astype(int)
+    corners = []
+    for i in probe:
+        found = detect_face(frames[i])
+        if found is not None:
+            corners.append(found[1][3:5])
+    if len(corners) < max(1, len(probe) // 2):
+        return fallback
+    corners = np.median(np.array(corners, dtype=np.float32), axis=0)   # [2, 2]
+    (x_r, y_r), (x_l, y_l) = corners
+    mouth_width = float(np.hypot(x_l - x_r, y_l - y_r))
+    size = min(width, height)
+    side = float(np.clip(scale * mouth_width, min_fraction * size, max_fraction * size))
+    cx, cy = (x_r + x_l) / 2.0, (y_r + y_l) / 2.0
+    x0 = int(round(np.clip(cx - side / 2.0, 0, max(0, width - side))))
+    y0 = int(round(np.clip(cy - side / 2.0, 0, max(0, height - side))))
+    x1 = int(round(min(width, x0 + side)))
+    y1 = int(round(min(height, y0 + side)))
+    if x1 - x0 < 16 or y1 - y0 < 16:
+        return fallback
+    return x0, y0, x1, y1
 
 
 def stable_face_box(frames, max_probe=5, margin=1.4, already_cropped_fraction=0.45):

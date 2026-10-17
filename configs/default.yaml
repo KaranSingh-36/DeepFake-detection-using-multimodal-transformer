@@ -7,7 +7,9 @@ data:
   cache_dir: data/features        # per-video frozen encoder features
   visual_fps: 5                   # frames per second fed to ViT
   image_size: 224
-  face_crop: true                 # Haar-cascade face crop (no-op for LAV-DF, matters for uploads)
+  face_crop: true                 # YuNet face crop (LAV-DF is already face-centred; matters for uploads)
+  visual_streams: [face, mouth]   # ViT runs on the face and on the lower-face (mouth) region.
+                                  # [face] alone = the older, weaker visual pathway (half the visual cache size)
   sample_rate: 16000
   audio_layers: [6, 12]           # Wav2Vec2 hidden states kept in the cache
   audio_pool: 2                   # 50 Hz -> 25 Hz
@@ -44,12 +46,16 @@ train:
   warmup_fraction: 0.05
   grad_clip: 1.0
   loss_weights: {video: 1.0, audio: 1.0, fused: 1.0, steps: 1.0}   # steps = per-step localisation heads
+  modality_dropout: 0.3           # share of training windows that lose audio (half) or video (half);
+                                  # forces the fused head to use both streams. 0 = off
   num_workers: 4
   amp: auto                       # auto | true | false
   seed: 42
   max_train_videos: null          # subset for quick runs
   max_dev_videos: 2000            # dev videos scored each epoch
   select_by: video_auc            # checkpoint selection metric
+  update_latest: true             # let this run become results/runs/latest/best.pt (the dashboard default)
+                                  # when it is the best cross_attention / concat run so far
   # raw mode only
   trainable_video_blocks: 0
   trainable_audio_blocks: 0
@@ -62,6 +68,7 @@ eval:
   max_videos: null
   batch_windows: 256
   score_pooling: max              # max | top3 (mean of 3 highest windows)
+  step_threshold_metric: f1       # how the per-step segment threshold is chosen on dev: f1 | balanced_accuracy
   curve_resolution: 0.05
   min_segment_seconds: 0.2
   iou_thresholds: [0.5, 0.75, 0.95]

@@ -4,7 +4,7 @@ import torch
 
 from fusiontrace.data import slice_steps, step_targets, window_tensors
 from fusiontrace.windows import VideoMeta
-from fusiontrace.model import FUSION_VARIANTS, WindowFusionModel, multitask_loss
+from fusiontrace.model import FUSION_VARIANTS, WindowFusionModel, apply_modality_dropout, multitask_loss
 
 
 def make_batch(b=3, tv=8, ta=40, dv=1536, da=768, layers=2):
@@ -100,3 +100,31 @@ def test_step_targets_follow_periods_and_flags():
     assert video.sum() == 0
     assert audio.tolist() == [0, 0, 1, 1, 1, 0, 0, 0]          # 2.7 is the exclusive end
     assert any_.tolist() == audio.tolist()
+
+
+def test_modality_dropout_relabels_fused_targets():
+    torch.manual_seed(0)
+    n = 8
+    batch = {
+        "visual": torch.randn(n, 8, 16), "audio": torch.randn(n, 2, 40, 12),
+        "visual_mask": torch.ones(n, 8, dtype=torch.bool), "audio_mask": torch.ones(n, 40, dtype=torch.bool),
+        # every window is an audio-only fake: y_video 0, y_audio 1, y_any 1
+        "y_video": torch.zeros(n), "y_audio": torch.ones(n), "y_any": torch.ones(n),
+        "y_video_steps": torch.zeros(n, 8), "y_audio_steps": torch.ones(n, 40), "y_any_steps": torch.ones(n, 8),
+        "ambiguous": torch.zeros(n, dtype=torch.bool),
+    }
+    out = apply_modality_dropout(batch, probability=1.0, generator=torch.Generator().manual_seed(1))
+    drop_audio = ~out["audio_present"]
+    drop_video = ~out["video_present"]
+    assert (drop_audio | drop_video).all() and not (drop_audio & drop_video).any()
+    # audio removed -> nothing fake remains for the fused head
+    assert (out["y_any"][drop_audio] == 0).all() and (out["y_any_steps"][drop_audio] == 0).all()
+    assert (out["audio"][drop_audio] == 0).all()
+    # video removed -> the audio fake is still there
+    assert (out["y_any"][drop_video] == 1).all() and (out["y_any_steps"][drop_video] == 1).all()
+    assert (out["visual"][drop_video] == 0).all()
+    # the unimodal head of the missing modality is excluded from the loss
+    model = WindowFusionModel(16, 12, 2, dim=16, heads=2, fusion="cross_attention")
+    outputs = model(out["visual"], out["audio"], out["visual_mask"], out["audio_mask"])
+    total, parts = multitask_loss(outputs, out)
+    assert torch.isfinite(total) and {"video", "audio", "fused", "steps"} <= set(parts)

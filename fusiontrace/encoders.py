@@ -2,10 +2,12 @@
 the fusion model consumes. The same module is used to build the feature cache
 (fully frozen) and for end-to-end fine-tuning (top blocks unfrozen).
 
-Visual feature per frame : [CLS token ; mean of patch tokens]  -> 2 * hidden
+Visual feature per frame : [CLS token ; mean of patch tokens] per visual stream
+                           ("face", "mouth")                     -> 2 * hidden * streams
 Audio feature per step   : hidden states of the chosen layers   -> [L, hidden]
 """
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -47,6 +49,7 @@ class FrozenEncoders(nn.Module):
         audio_model_name="facebook/wav2vec2-base",
         audio_layers=(6, 12),
         audio_pool=2,
+        visual_streams=("face", "mouth"),
         trainable_video_blocks=0,
         trainable_audio_blocks=0,
         gradient_checkpointing=False,
@@ -56,6 +59,9 @@ class FrozenEncoders(nn.Module):
         self.audio_model_name = audio_model_name
         self.audio_layers = [int(layer) for layer in audio_layers]
         self.audio_pool = int(audio_pool)
+        self.visual_streams = [str(name) for name in visual_streams]
+        if not self.visual_streams:
+            raise ValueError("visual_streams must name at least one stream")
         self.trainable_video_blocks = int(trainable_video_blocks)
         self.trainable_audio_blocks = int(trainable_audio_blocks)
 
@@ -108,7 +114,7 @@ class FrozenEncoders(nn.Module):
     # ------------------------------------------------------------------ dims
     @property
     def visual_dim(self):
-        return 2 * self.vit.config.hidden_size
+        return 2 * self.vit.config.hidden_size * len(self.visual_streams)
 
     @property
     def audio_dim(self):
@@ -160,6 +166,22 @@ class FrozenEncoders(nn.Module):
                 patches = hidden[:, 1:].mean(dim=1)
                 outputs.append(torch.cat([cls, patches], dim=-1))
         return torch.cat(outputs, dim=0)
+
+    def encode_visual(self, streams):
+        """{"face": uint8 [N, S, S, 3], "mouth": ...} -> [N, visual_dim].
+
+        Streams are encoded separately with the same ViT and concatenated in the
+        order of `self.visual_streams`.
+        """
+        parts = []
+        for name in self.visual_streams:
+            if name not in streams:
+                raise KeyError(f"visual stream {name!r} missing from the decoded clip")
+            frames = streams[name]
+            if not torch.is_tensor(frames):
+                frames = torch.from_numpy(np.ascontiguousarray(frames))
+            parts.append(self.encode_frames(self.preprocess_frames(frames.to(self.image_mean.device))))
+        return torch.cat(parts, dim=-1)
 
     # ------------------------------------------------------------------ audio
     def encode_audio(self, waveform):
@@ -240,6 +262,7 @@ class FrozenEncoders(nn.Module):
             "audio_model_name": self.audio_model_name,
             "audio_layers": self.audio_layers,
             "audio_pool": self.audio_pool,
+            "visual_streams": list(self.visual_streams),
             "visual_dim": self.visual_dim,
             "audio_dim": self.audio_dim,
             "audio_hz": self.audio_hz,

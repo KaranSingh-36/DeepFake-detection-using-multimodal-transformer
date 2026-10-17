@@ -40,7 +40,8 @@ def test_pipeline(tmp_path):
 
     out = run(SCRIPTS / "train.py", *common, "--name", "pytest_smoke", "--set", "train.epochs=2",
               "--set", "train.windows_per_epoch=64", "--set", "train.batch_size=8",
-              "--set", "train.num_workers=0", "--set", "train.max_dev_videos=4")
+              "--set", "train.num_workers=0", "--set", "train.max_dev_videos=4",
+              "--set", "train.update_latest=false")
     assert "DEV | video AUC" in out
     best = ROOT / "results" / "runs" / "pytest_smoke" / "best.pt"
     assert best.is_file()
