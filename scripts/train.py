@@ -95,6 +95,22 @@ def checkpoint_payload(cfg, manifest, model_kwargs, fusion_model, encoders, epoc
     }
 
 
+def select_metric(report, key):
+    """Value of `key` in the dev report; dotted keys reach nested entries,
+    e.g. "video_auc", "window_level.fused_auc", "localisation.ap@0.5"."""
+    parts = str(key).split(".")
+    node, i = report, 0
+    while i < len(parts):
+        for j in range(len(parts), i, -1):            # longest key first ("ap@0.5" contains a dot)
+            candidate = ".".join(parts[i:j])
+            if isinstance(node, dict) and candidate in node:
+                node, i = node[candidate], j
+                break
+        else:
+            return float(report["video_level"]["auc"])
+    return float(node) if node is not None else -1.0
+
+
 def update_latest(run_dir, name, metric_name, metric_value, fusion, log):
     """results/runs/latest/best.pt = the best checkpoint across runs.
 
@@ -261,6 +277,8 @@ def main():
 
     loss_weights = dict(cfg.train.loss_weights)
     modality_dropout = float(cfg.train.get("modality_dropout", 0.0))
+    if cfg.train.fusion in ("video_only", "audio_only"):
+        modality_dropout = 0.0          # a unimodal model has nothing to fall back on
     dropout_generator = torch.Generator().manual_seed(int(cfg.train.seed) + 1)
     log(f"Modality dropout: {modality_dropout:.2f} (share of windows that lose audio or video during training)")
     log_every = max(1, steps_per_epoch // 10)
@@ -327,7 +345,7 @@ def main():
         with open(run_dir / "history.json", "w", encoding="utf-8") as handle:
             json.dump(history, handle, indent=2, default=float)
 
-        metric_value = report[cfg.train.select_by] if cfg.train.select_by in report else vl["auc"]
+        metric_value = select_metric(report, cfg.train.select_by)
         if isinstance(metric_value, float) and math.isnan(metric_value):
             metric_value = -1.0
         payload = checkpoint_payload(cfg, manifest, model_kwargs, fusion_model, encoders, epoch + 1, report,

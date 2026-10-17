@@ -1,0 +1,75 @@
+data:
+  dataset_root: null
+  metadata_csv: /tmp/ft_demo/real/sample.csv
+  cache_dir: data/features
+  visual_fps: 5
+  image_size: 224
+  face_crop: true
+  visual_streams:
+  - face
+  - mouth
+  sample_rate: 16000
+  audio_layers:
+  - 6
+  - 12
+  audio_pool: 2
+  audio_chunk_seconds: 4.0
+  audio_hop_seconds: 3.2
+encoders:
+  video_model_name: google/vit-base-patch16-224
+  audio_model_name: facebook/wav2vec2-base
+window:
+  seconds: 1.6
+  train_stride_seconds: 0.4
+  eval_stride_seconds: 0.2
+  min_overlap_seconds: 0.2
+  min_overlap_fraction: 0.5
+  jitter_seconds: 0.2
+model:
+  dim: 256
+  heads: 4
+  temporal_layers: 1
+  dropout: 0.1
+train:
+  name: v2_xattn
+  source: cache
+  fusion: cross_attention
+  epochs: 8
+  windows_per_epoch: 40000
+  batch_size: 64
+  lr: 0.0003
+  weight_decay: 0.01
+  warmup_fraction: 0.05
+  grad_clip: 1.0
+  loss_weights:
+    video: 1.0
+    audio: 1.0
+    fused: 1.0
+    steps: 1.0
+  modality_dropout: 0.3
+  num_workers: 2
+  amp: auto
+  seed: 42
+  max_train_videos: null
+  max_dev_videos: 2000
+  select_by: video_auc
+  update_latest: true
+  trainable_video_blocks: 0
+  trainable_audio_blocks: 0
+  gradient_checkpointing: true
+  raw_batch_size: 4
+  raw_lr_encoders: 2.0e-05
+eval:
+  split: test
+  max_videos: null
+  batch_windows: 256
+  score_pooling: max
+  step_threshold_metric: f1
+  curve_resolution: 0.05
+  min_segment_seconds: 0.2
+  iou_thresholds:
+  - 0.5
+  - 0.75
+  - 0.95
+inference:
+  checkpoint: results/runs/latest/best.pt

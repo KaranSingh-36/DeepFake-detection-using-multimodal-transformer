@@ -53,7 +53,9 @@ train:
   seed: 42
   max_train_videos: null          # subset for quick runs
   max_dev_videos: 2000            # dev videos scored each epoch
-  select_by: video_auc            # checkpoint selection metric
+  select_by: window_level.fused_auc   # checkpoint selection metric (dotted = nested key of the dev report).
+                                  # video_auc saturates at 1.0 early on a small dev set; the window-level AUC
+                                  # of the fused head keeps separating epochs. Other options: localisation.ap@0.5
   update_latest: true             # let this run become results/runs/latest/best.pt (the dashboard default)
                                   # when it is the best cross_attention / concat run so far
   # raw mode only

@@ -1,0 +1,6 @@
+input,real flagged,fake flagged,video-only fake flagged,n
+original file,0.0,1.0,1.0,40
+"re-compressed (H.264 crf 32, AAC 48k)",0.025,1.0,0.95,40
+upscaled to 640x640,0.0,1.0,1.0,40
+padded to 1280x720 (small face),0.0,0.975,0.975,40
+audio removed,0.05,0.475,0.525,40

@@ -151,7 +151,8 @@ missing modality is skipped in the loss. Without this the fused head solves
 LAV-DF from the audio alone and never learns to use the frames (see section 9).
 After every epoch the dev clips are scored; the clip threshold (balanced
 accuracy) and the step threshold (F1 on the dense curve) are chosen on dev and
-stored in the checkpoint, and `best.pt` is kept by dev video AUC.
+stored in the checkpoint, and `best.pt` is kept by the dev window-level AUC
+of the fused head (`train.select_by`; clip AUC saturates at 1.0 too early).
 
 **Step 7, inference (`fusiontrace/inference.py`, `fusiontrace/evaluation.py`).**
 All windows of a clip are scored. Clip score = the maximum fused window score;
@@ -222,7 +223,9 @@ VS Code or Explorer, right-click, "Open in Terminal".
 ### 4.1 Python environment
 
 The folder already contains `.venv` (Python 3.12, PyTorch 2.14 with CUDA 13.0,
-transformers, OpenCV 5, scikit-learn, PyYAML, matplotlib). Activate it:
+transformers, OpenCV 5, scikit-learn, PyYAML, matplotlib, pytest). It was
+created with `uv`, so it has no `pip` of its own: install packages into it
+with `uv pip`, which is on this machine. Activate it:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
@@ -235,23 +238,27 @@ current user once:
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 ```
 
-Install the two packages that are still missing (the test runner and a
-bundled ffmpeg fallback):
+Make sure everything in `requirements.txt` is present (already true here; the
+command is quick and safe to repeat):
 
 ```powershell
-pip install pytest imageio-ffmpeg
+uv pip install --python .\.venv\Scripts\python.exe -r requirements.txt
 ```
 
-Starting from an empty machine instead? Create the environment and install
-PyTorch **with CUDA first**, then the rest; `pip install torch` alone would
+Starting from an empty machine instead? Install `uv`
+(<https://docs.astral.sh/uv/>), then create the environment and install
+PyTorch **with CUDA first**, then the rest; a plain `torch` install would
 give you the CPU build:
 
 ```powershell
-py -3.12 -m venv .venv
+uv venv --python 3.12 .venv
 .\.venv\Scripts\Activate.ps1
-pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu126
-pip install -r requirements.txt
+uv pip install --python .\.venv\Scripts\python.exe torch torchaudio --index-url https://download.pytorch.org/whl/cu126
+uv pip install --python .\.venv\Scripts\python.exe -r requirements.txt
 ```
+
+(With a standard `python -m venv .venv` the same lines work with `pip install`
+instead of `uv pip install --python ...`.)
 
 Check that the GPU is seen (expected: `2.14.x+cu130 True NVIDIA GeForce RTX 3050 Laptop GPU`):
 
@@ -383,7 +390,8 @@ python scripts\train.py --name xattn_25k
 - Trains on **every train clip that is in the cache** and scores up to 2,000
   cached dev clips after each epoch (`train.max_dev_videos`).
 - Prints per-epoch loss and the dev metrics; writes `history.json`,
-  `train.log`, `last.pt` (for resuming) and `best.pt` (best dev video AUC).
+  `train.log`, `last.pt` (for resuming) and `best.pt` (best dev window-level
+  fused AUC, `train.select_by`).
   When this run is the best cross-attention / concat run so far it is also
   copied to `results\runs\latest\best.pt`, which the dashboard uses by default.
   Unimodal ablations never replace `latest`.
@@ -485,6 +493,7 @@ can edit the file or override any key on the command line with
 | Train on a subset of the cached clips           | `train.max_train_videos` (null = all cached).                                                                           |
 | Score fewer dev clips per epoch (faster epochs) | `train.max_dev_videos` (2000).                                                                                          |
 | Compare fusion variants                         | `train.fusion`: `cross_attention`, `concat`, `video_only`, `audio_only`.                                               |
+| Pick `best.pt` by another dev metric            | `train.select_by`: `window_level.fused_auc` (default), `video_auc`, `localisation.ap@0.5`.                            |
 | Make the fused head use both streams more/less  | `train.modality_dropout` (0.3). 0 turns it off, 0.5 is aggressive.                                                      |
 | GPU out of memory while training                | `train.batch_size` (64 -> 32). While evaluating: `eval.batch_windows` (256 -> 128).                                   |
 | Change the window                               | `window.seconds` (1.6), `window.train_stride_seconds` (0.4), `window.eval_stride_seconds` (0.2). No cache rebuild needed. |
@@ -503,17 +512,23 @@ python scripts\train.py --name xattn_25k --set train.epochs=16 --set train.batch
 
 ## 7. Storage and time planner
 
-Measured on this laptop (RTX 3050 4 GB, dataset on the C: drive). Caching is
-GPU-bound at about 55 clips per minute with the two visual streams; LAV-DF
-clips average 8.6 s.
+Measured on this laptop (RTX 3050 4 GB, dataset on the C: drive). LAV-DF
+clips average 8.6 s. Caching ran at 55-65 clips per minute with the two
+visual streams while another GPU job was running at the same time; with the
+GPU to itself expect roughly twice that (the single-stream version measured
+250 clips/min alone). The table uses the measured, conservative rate.
 
-| Cache                                   | Clips   | Disk     | Time at 55 clips/min |
+| Cache                                   | Clips   | Disk     | Time at 60 clips/min |
 | --------------------------------------- | ------- | -------- | -------------------- |
-| 25,000 train + 5,000 dev + 5,000 test   | 35,000  | ~32 GB   | ~11 h                |
-| Full train (78,703)                     | 78,703  | ~71 GB   | ~24 h                |
-| Full train + dev + test (136,304)       | 136,304 | ~123 GB  | ~41 h                |
-| Same with `audio_layers: [8]`, `audio_pool: 4` | 136,304 | ~50 GB | ~41 h            |
-| Same, plus `visual_streams: [face]`     | 136,304 | ~38 GB   | ~22 h                |
+| 25,000 train + 5,000 dev + 5,000 test   | 35,000  | ~32 GB   | ~10 h                |
+| Full train (78,703)                     | 78,703  | ~71 GB   | ~22 h                |
+| Full train + dev + test (136,304)       | 136,304 | ~123 GB  | ~38 h                |
+| Same with `audio_layers: [8]`, `audio_pool: 4` | 136,304 | ~50 GB | ~38 h            |
+| Same, plus `visual_streams: [face]`     | 136,304 | ~38 GB   | ~20 h                |
+
+Training: about 2-3 minutes per epoch (40,000 windows) plus 1 minute of dev
+scoring with the two-stream features, so a default 8-epoch run is 20-30
+minutes; 17 MB per checkpoint; 2-5 minutes per evaluation.
 
 C: had about 79 GB free when this was written. Things in the project folder
 that can be deleted to make room (all git-ignored, nothing in the repository
@@ -564,23 +579,38 @@ should be near 0.
 
 ## 9. Current results
 
-See `results\lavdf_sample_run\README.md` for the complete tables. Summary of a
-sample run (3,000 train / 600 dev / 1,000 test clips, default config, one
-seed per variant):
+See `results\lavdf_sample_run\README.md` for the complete tables. Summary of
+the sample run (3,000 train / 600 dev / 1,000 test clips, default config,
+one seed per variant), cross-attention model:
 
-- Window-level AUC is 0.99 and the timelines land on the annotated fake
-  periods: detection follows the manipulation now.
-- Before the mouth stream and modality dropout, the audio carried almost all
-  of the decision: the audio-only variant matched cross-attention, "video
-  only" fakes were still flagged 97 % of the time with the real frames swapped
-  in, and removing the audio track dropped detection from 100 % to 0 %. The
+| measure (test)                                            | v1 face only, no dropout | v2 face + mouth, dropout 0.3 |
+| --------------------------------------------------------- | ------------------------ | ---------------------------- |
+| clip-level AUC / balanced accuracy                        | 0.999 / 0.997            | 0.999 / 0.995                |
+| real clips flagged                                        | 0.0 %                    | 0.0 %                        |
+| window AUC: fused / video head / audio head               | 0.993 / 0.851 / 0.995    | 0.991 / 0.875 / 0.994        |
+| fakes detected with the audio track removed (40 clips)    | 0 %                      | 47.5 % (video-only fakes 52.5 %) |
+| real clips flagged with the audio track removed           | 0 %                      | 5 %                          |
+| segment AP@0.5                                            | 0.805                    | 0.759                        |
+
+- Detection follows the manipulated segment: window-level AUC 0.99 and the
+  timelines land on the annotated fake periods (`timelines\`).
+- In v1 the audio carried the whole decision: the audio-only variant matched
+  cross-attention, "video only" fakes were flagged 97 % of the time with the
+  real frames swapped in, and a clip without audio was never detected. The
   cause is in the data: LAV-DF time-edits the audio of "video only" fakes to
-  fit the new segment (in 40 of 40 sampled clips the audio differs from the
-  source inside the fake period).
-- The tables in `results\lavdf_sample_run\README.md` compare the two versions
-  (face-only / no dropout, and face + mouth / dropout 0.3) on the same clips.
-
----
+  fit the new segment (40 of 40 sampled clips differ from the source inside
+  the fake period), so audio is a shortcut for every fake type.
+- v2 makes the fused head use the frames (0 % to 47.5 % without audio) and
+  improves the video head, but the visual pathway is still the weak one:
+  frozen ImageNet features of the face and mouth at 5 fps separate fake from
+  real windows with AUC 0.875, against 0.994 for audio. Fine-tuning the top
+  ViT blocks (`train.source=raw`) is the next lever.
+- Re-compression, upscaling and padding to 1280x720 change the results by at
+  most 2.5 points (`robustness_probe_cross_attention.csv`).
+- Checkpoint selection by dev video AUC saturates at 1.0 on a 600-clip dev
+  set and picked epoch 2; later epochs had a better video head (0.90 on dev).
+  The default `train.select_by` is now the window-level fused AUC, which
+  keeps separating epochs.
 
 ## 10. Troubleshooting
 
@@ -590,12 +620,14 @@ seed per variant):
 | `Need cached train and dev clips. Run scripts/build_cache.py first.` | No clips of that split in the cache. Check `data.cache_dir` is the same in both commands.                          |
 | `LAV-DF dataset directory not found`                                 | Set `$env:LAVDF_ROOT` or `data.dataset_root` (section 4.3).                                                         |
 | `torch.cuda.is_available()` is False                                 | CPU build of PyTorch installed. Reinstall with the CUDA index URL (section 4.1).                                    |
+| `No module named pip`                                                | The venv was made by `uv`. Use `uv pip install --python .\.venv\Scripts\python.exe <package>` (section 4.1).      |
 | CUDA out of memory                                                   | Lower `train.batch_size`, `eval.batch_windows`; close other GPU programs (browsers use VRAM too).                  |
 | Caching is very slow                                                 | It is GPU-bound (~55 clips/min). `--workers` above 3 does not help; check nothing else uses the GPU.               |
 | `ffmpeg was not found`                                               | `pip install imageio-ffmpeg` or install ffmpeg and add it to PATH.                                                  |
 | Dashboard says `Checkpoint not found`                                | No `results\runs\latest\best.pt` yet. Train first, or pass `--checkpoint`.                                         |
 | Everything flagged REAL on a silent video                            | Expected to work via the video head; if the video head is weak for that clip, the score is low. Check `max_video_head` in the JSON. |
 | Windows: `RuntimeError: ... freeze_support()` or spawn errors        | Always run the scripts as files (`python scripts\train.py`), never paste their contents into an interactive session. |
+| `partial file` / `moov atom not found` on clips that play fine       | Transient read errors from the drive under memory pressure (seen in WSL with full swap). The clip is logged in `errors.log` and skipped; rerun `build_cache.py` later and it is picked up. |
 | OneDrive shows thousands of changed files                            | The cache or `results\runs` is inside the synced folder. Move the cache (section 4.5); `results\runs` is small.    |
 
 ---
