@@ -1,0 +1,13 @@
+fake type,model input,clips,mean_score,flagged_at_0.5
+video only,fake clip as-is,150,0.980861901541551,0.98
+video only,fake frames + source audio,150,0.18764243115360538,0.06666666666666667
+video only,source frames + fake audio,150,0.980861901541551,0.98
+video only,source clip (control),150,0.15185639165962736,0.03333333333333333
+audio only,fake clip as-is,150,0.9998593548933665,1.0
+audio only,fake frames + source audio,150,0.25745688159018754,0.17333333333333334
+audio only,source frames + fake audio,150,0.9998593548933665,1.0
+audio only,source clip (control),150,0.1464313132936756,0.03333333333333333
+video+audio,fake clip as-is,150,0.9998449329535166,1.0
+video+audio,fake frames + source audio,150,0.2607629141956568,0.16666666666666666
+video+audio,source frames + fake audio,150,0.9998449329535166,1.0
+video+audio,source clip (control),150,0.16711575256039699,0.04

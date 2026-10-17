@@ -1,0 +1,746 @@
+[
+  {
+    "epoch": 1,
+    "train_loss": 1.1177038181781769,
+    "train_loss_parts": {
+      "video": 0.5618318709373474,
+      "audio": 0.1419869743075222,
+      "fused": 0.14082339089885354,
+      "steps": 0.27306157882213594
+    },
+    "train_seconds": 44.43779655700018,
+    "dev": {
+      "video_level": {
+        "auc": 0.9999412593984962,
+        "average_precision": 0.9999802465233881,
+        "threshold": 0.8559725284576416,
+        "accuracy": 0.9983333333333333,
+        "balanced_accuracy": 0.9988839285714286,
+        "precision": 1.0,
+        "recall": 0.9977678571428571,
+        "f1": 0.9988826815642458,
+        "false_positive_rate": 0.0,
+        "tn": 152,
+        "fp": 0,
+        "fn": 1,
+        "tp": 447,
+        "n": 600,
+        "threshold_source": "tuned_here"
+      },
+      "per_fake_type": {
+        "real": {
+          "n": 152,
+          "flagged_rate": 0.0,
+          "mean_score": 0.21722628103299557
+        },
+        "video only": {
+          "n": 140,
+          "flagged_rate": 0.9928571428571429,
+          "mean_score": 0.9912956812552043
+        },
+        "audio only": {
+          "n": 154,
+          "flagged_rate": 1.0,
+          "mean_score": 0.9960094280057139
+        },
+        "video+audio": {
+          "n": 154,
+          "flagged_rate": 1.0,
+          "mean_score": 0.9966567154828604
+        }
+      },
+      "modality_attribution": {
+        "real": {
+          "video_head_mean_score": 0.4923212441713794,
+          "audio_head_mean_score": 0.2198293578418854
+        },
+        "video only": {
+          "video_head_mean_score": 0.88984210267663,
+          "audio_head_mean_score": 0.42100977468071504
+        },
+        "audio only": {
+          "video_head_mean_score": 0.7164925486333185,
+          "audio_head_mean_score": 0.9991054647154622
+        },
+        "video+audio": {
+          "video_head_mean_score": 0.8916701952648627,
+          "audio_head_mean_score": 0.9991311659286548
+        }
+      },
+      "window_level": {
+        "n_windows": 22026,
+        "fused_auc": 0.994643816858598,
+        "fused_ap": 0.9880898846141809,
+        "video_head_auc": 0.8255932266162755,
+        "audio_head_auc": 0.9967778153036246,
+        "positive_rate": 0.1994007082538818
+      },
+      "video_auc": 0.9999412593984962,
+      "threshold": 0.8559725284576416,
+      "localisation": {
+        "frame_level_auc": 0.9894242406859947,
+        "frame_level_ap": 0.9210210037512592,
+        "frame_level_balanced_accuracy": 0.9565792344566113,
+        "step_threshold": 0.1728772937453219,
+        "n_ground_truth_segments": 523,
+        "n_proposals": 857,
+        "n_segments_at_threshold": 602,
+        "ap@0.5": 0.7691465645741633,
+        "ap@0.75": 0.39539897552277403,
+        "ap@0.95": 0.013309076516296321,
+        "ap@0.5_at_threshold": 0.8179615013456547
+      }
+    }
+  },
+  {
+    "epoch": 2,
+    "train_loss": 0.5555496172428132,
+    "train_loss_parts": {
+      "video": 0.32816610736846924,
+      "audio": 0.026977075535384937,
+      "fused": 0.04279692706055939,
+      "steps": 0.1576095054626465
+    },
+    "train_seconds": 38.72724187200038,
+    "dev": {
+      "video_level": {
+        "auc": 0.9995007048872181,
+        "average_precision": 0.9998352006636451,
+        "threshold": 0.9924437403678894,
+        "accuracy": 0.995,
+        "balanced_accuracy": 0.9966517857142857,
+        "precision": 1.0,
+        "recall": 0.9933035714285714,
+        "f1": 0.9966405375139977,
+        "false_positive_rate": 0.0,
+        "tn": 152,
+        "fp": 0,
+        "fn": 3,
+        "tp": 445,
+        "n": 600,
+        "threshold_source": "tuned_here"
+      },
+      "per_fake_type": {
+        "real": {
+          "n": 152,
+          "flagged_rate": 0.0,
+          "mean_score": 0.220481654652088
+        },
+        "video only": {
+          "n": 140,
+          "flagged_rate": 0.9785714285714285,
+          "mean_score": 0.9977416098117828
+        },
+        "audio only": {
+          "n": 154,
+          "flagged_rate": 1.0,
+          "mean_score": 0.9998704566584005
+        },
+        "video+audio": {
+          "n": 154,
+          "flagged_rate": 1.0,
+          "mean_score": 0.9998176976457819
+        }
+      },
+      "modality_attribution": {
+        "real": {
+          "video_head_mean_score": 0.36562445276802846,
+          "audio_head_mean_score": 0.07828765590123735
+        },
+        "video only": {
+          "video_head_mean_score": 0.8640652727585153,
+          "audio_head_mean_score": 0.22571995892628496
+        },
+        "audio only": {
+          "video_head_mean_score": 0.6036060417370338,
+          "audio_head_mean_score": 0.9997788830236956
+        },
+        "video+audio": {
+          "video_head_mean_score": 0.8500590185036084,
+          "audio_head_mean_score": 0.9997982564684632
+        }
+      },
+      "window_level": {
+        "n_windows": 22026,
+        "fused_auc": 0.9943264964312815,
+        "fused_ap": 0.9883881397964648,
+        "video_head_auc": 0.830508054324774,
+        "audio_head_auc": 0.9978072593619778,
+        "positive_rate": 0.1994007082538818
+      },
+      "video_auc": 0.9995007048872181,
+      "threshold": 0.9924437403678894,
+      "localisation": {
+        "frame_level_auc": 0.993059417843475,
+        "frame_level_ap": 0.9377656336167539,
+        "frame_level_balanced_accuracy": 0.9682641166335325,
+        "step_threshold": 0.1478790028450021,
+        "n_ground_truth_segments": 523,
+        "n_proposals": 789,
+        "n_segments_at_threshold": 598,
+        "ap@0.5": 0.7995634807641381,
+        "ap@0.75": 0.4314807970649016,
+        "ap@0.95": 0.017082363911500142,
+        "ap@0.5_at_threshold": 0.8067028275640029
+      }
+    }
+  },
+  {
+    "epoch": 3,
+    "train_loss": 0.39400849409103395,
+    "train_loss_parts": {
+      "video": 0.21669362700581551,
+      "audio": 0.015875834758742713,
+      "fused": 0.027334847892355175,
+      "steps": 0.13410418330430984
+    },
+    "train_seconds": 39.7486382850002,
+    "dev": {
+      "video_level": {
+        "auc": 0.9997797227443609,
+        "average_precision": 0.9999276843566799,
+        "threshold": 0.9940204918384552,
+        "accuracy": 0.9983333333333333,
+        "balanced_accuracy": 0.9988839285714286,
+        "precision": 1.0,
+        "recall": 0.9977678571428571,
+        "f1": 0.9988826815642458,
+        "false_positive_rate": 0.0,
+        "tn": 152,
+        "fp": 0,
+        "fn": 1,
+        "tp": 447,
+        "n": 600,
+        "threshold_source": "tuned_here"
+      },
+      "per_fake_type": {
+        "real": {
+          "n": 152,
+          "flagged_rate": 0.0,
+          "mean_score": 0.16760134468648558
+        },
+        "video only": {
+          "n": 140,
+          "flagged_rate": 0.9928571428571429,
+          "mean_score": 0.998025763460568
+        },
+        "audio only": {
+          "n": 154,
+          "flagged_rate": 1.0,
+          "mean_score": 0.9998576540451545
+        },
+        "video+audio": {
+          "n": 154,
+          "flagged_rate": 1.0,
+          "mean_score": 0.9999094144864515
+        }
+      },
+      "modality_attribution": {
+        "real": {
+          "video_head_mean_score": 0.28080645003204774,
+          "audio_head_mean_score": 0.024335213590958166
+        },
+        "video only": {
+          "video_head_mean_score": 0.8681728279667108,
+          "audio_head_mean_score": 0.09697168050458588
+        },
+        "audio only": {
+          "video_head_mean_score": 0.612314257861301,
+          "audio_head_mean_score": 0.9998329506291972
+        },
+        "video+audio": {
+          "video_head_mean_score": 0.8968319101202417,
+          "audio_head_mean_score": 0.9998276384619923
+        }
+      },
+      "window_level": {
+        "n_windows": 22026,
+        "fused_auc": 0.9953635529393148,
+        "fused_ap": 0.9901672175559282,
+        "video_head_auc": 0.8496176053277473,
+        "audio_head_auc": 0.997881489267055,
+        "positive_rate": 0.1994007082538818
+      },
+      "video_auc": 0.9997797227443609,
+      "threshold": 0.9940204918384552,
+      "localisation": {
+        "frame_level_auc": 0.9926032425371049,
+        "frame_level_ap": 0.9327142349860712,
+        "frame_level_balanced_accuracy": 0.9640423656461095,
+        "step_threshold": 0.10889665338945634,
+        "n_ground_truth_segments": 523,
+        "n_proposals": 770,
+        "n_segments_at_threshold": 655,
+        "ap@0.5": 0.8106756933074406,
+        "ap@0.75": 0.42154530923030387,
+        "ap@0.95": 0.019959415085710613,
+        "ap@0.5_at_threshold": 0.8295130366079035
+      }
+    }
+  },
+  {
+    "epoch": 4,
+    "train_loss": 0.2910909265875816,
+    "train_loss_parts": {
+      "video": 0.15297898517549038,
+      "audio": 0.008352127880812623,
+      "fused": 0.015805062836920843,
+      "steps": 0.11395475023984909
+    },
+    "train_seconds": 38.436975792999874,
+    "dev": {
+      "video_level": {
+        "auc": 0.999985314849624,
+        "average_precision": 0.9999950286350621,
+        "threshold": 0.9976249635219574,
+        "accuracy": 0.9983333333333333,
+        "balanced_accuracy": 0.9988839285714286,
+        "precision": 1.0,
+        "recall": 0.9977678571428571,
+        "f1": 0.9988826815642458,
+        "false_positive_rate": 0.0,
+        "tn": 152,
+        "fp": 0,
+        "fn": 1,
+        "tp": 447,
+        "n": 600,
+        "threshold_source": "tuned_here"
+      },
+      "per_fake_type": {
+        "real": {
+          "n": 152,
+          "flagged_rate": 0.0,
+          "mean_score": 0.08357019272233102
+        },
+        "video only": {
+          "n": 140,
+          "flagged_rate": 0.9928571428571429,
+          "mean_score": 0.9998289419072015
+        },
+        "audio only": {
+          "n": 154,
+          "flagged_rate": 1.0,
+          "mean_score": 0.9999710042755325
+        },
+        "video+audio": {
+          "n": 154,
+          "flagged_rate": 1.0,
+          "mean_score": 0.9999766818114689
+        }
+      },
+      "modality_attribution": {
+        "real": {
+          "video_head_mean_score": 0.2636903956822368,
+          "audio_head_mean_score": 0.02676270788821823
+        },
+        "video only": {
+          "video_head_mean_score": 0.8735948363651654,
+          "audio_head_mean_score": 0.10519565899339796
+        },
+        "audio only": {
+          "video_head_mean_score": 0.5817588336862904,
+          "audio_head_mean_score": 0.999967904446961
+        },
+        "video+audio": {
+          "video_head_mean_score": 0.8875050241476856,
+          "audio_head_mean_score": 0.9999705007323971
+        }
+      },
+      "window_level": {
+        "n_windows": 22026,
+        "fused_auc": 0.9955845448734675,
+        "fused_ap": 0.9905957692509364,
+        "video_head_auc": 0.8510971532162022,
+        "audio_head_auc": 0.9974828649273917,
+        "positive_rate": 0.1994007082538818
+      },
+      "video_auc": 0.999985314849624,
+      "threshold": 0.9976249635219574,
+      "localisation": {
+        "frame_level_auc": 0.9931563386316187,
+        "frame_level_ap": 0.9442193419036331,
+        "frame_level_balanced_accuracy": 0.9684487820174201,
+        "step_threshold": 0.044770001633878564,
+        "n_ground_truth_segments": 523,
+        "n_proposals": 670,
+        "n_segments_at_threshold": 653,
+        "ap@0.5": 0.8213728984506933,
+        "ap@0.75": 0.4510852677192014,
+        "ap@0.95": 0.019179378345065185,
+        "ap@0.5_at_threshold": 0.804976686272674
+      }
+    }
+  },
+  {
+    "epoch": 5,
+    "train_loss": 0.23491476858854293,
+    "train_loss_parts": {
+      "video": 0.11198579863905907,
+      "audio": 0.007634430829738267,
+      "fused": 0.013296011351700871,
+      "steps": 0.10199852720499039
+    },
+    "train_seconds": 39.28546990999894,
+    "dev": {
+      "video_level": {
+        "auc": 0.9996475563909775,
+        "average_precision": 0.9998827002710493,
+        "threshold": 0.9651237726211548,
+        "accuracy": 0.995,
+        "balanced_accuracy": 0.9944783834586466,
+        "precision": 0.9977628635346756,
+        "recall": 0.9955357142857143,
+        "f1": 0.9966480446927374,
+        "false_positive_rate": 0.006578947368421052,
+        "tn": 151,
+        "fp": 1,
+        "fn": 2,
+        "tp": 446,
+        "n": 600,
+        "threshold_source": "tuned_here"
+      },
+      "per_fake_type": {
+        "real": {
+          "n": 152,
+          "flagged_rate": 0.006578947368421052,
+          "mean_score": 0.07834175714953362
+        },
+        "video only": {
+          "n": 140,
+          "flagged_rate": 0.9857142857142858,
+          "mean_score": 0.9929480158856937
+        },
+        "audio only": {
+          "n": 154,
+          "flagged_rate": 1.0,
+          "mean_score": 0.999884896077119
+        },
+        "video+audio": {
+          "n": 154,
+          "flagged_rate": 1.0,
+          "mean_score": 0.999960074177036
+        }
+      },
+      "modality_attribution": {
+        "real": {
+          "video_head_mean_score": 0.22467169536916068,
+          "audio_head_mean_score": 0.014123180618137093
+        },
+        "video only": {
+          "video_head_mean_score": 0.8307059335775973,
+          "audio_head_mean_score": 0.09982330677294157
+        },
+        "audio only": {
+          "video_head_mean_score": 0.5580282336632554,
+          "audio_head_mean_score": 0.9999494777097331
+        },
+        "video+audio": {
+          "video_head_mean_score": 0.8808036195848937,
+          "audio_head_mean_score": 0.9999650167180346
+        }
+      },
+      "window_level": {
+        "n_windows": 22026,
+        "fused_auc": 0.9963056560610164,
+        "fused_ap": 0.9912656983076207,
+        "video_head_auc": 0.8409882939506201,
+        "audio_head_auc": 0.9979085186346647,
+        "positive_rate": 0.1994007082538818
+      },
+      "video_auc": 0.9996475563909775,
+      "threshold": 0.9651237726211548,
+      "localisation": {
+        "frame_level_auc": 0.9918916485738716,
+        "frame_level_ap": 0.9408344605187593,
+        "frame_level_balanced_accuracy": 0.9675045562100288,
+        "step_threshold": 0.05166451478152112,
+        "n_ground_truth_segments": 523,
+        "n_proposals": 632,
+        "n_segments_at_threshold": 601,
+        "ap@0.5": 0.819703827141276,
+        "ap@0.75": 0.46874861939309853,
+        "ap@0.95": 0.022073005516334364,
+        "ap@0.5_at_threshold": 0.7976971967573826
+      }
+    }
+  },
+  {
+    "epoch": 6,
+    "train_loss": 0.18574840943813323,
+    "train_loss_parts": {
+      "video": 0.08051781496554614,
+      "audio": 0.005804961457196623,
+      "fused": 0.008488893031771295,
+      "steps": 0.09093673983812332
+    },
+    "train_seconds": 38.67686764999962,
+    "dev": {
+      "video_level": {
+        "auc": 0.9998384633458646,
+        "average_precision": 0.9999460648803808,
+        "threshold": 0.9930271506309509,
+        "accuracy": 0.995,
+        "balanced_accuracy": 0.9966517857142857,
+        "precision": 1.0,
+        "recall": 0.9933035714285714,
+        "f1": 0.9966405375139977,
+        "false_positive_rate": 0.0,
+        "tn": 152,
+        "fp": 0,
+        "fn": 3,
+        "tp": 445,
+        "n": 600,
+        "threshold_source": "tuned_here"
+      },
+      "per_fake_type": {
+        "real": {
+          "n": 152,
+          "flagged_rate": 0.0,
+          "mean_score": 0.052614385009962315
+        },
+        "video only": {
+          "n": 140,
+          "flagged_rate": 0.9785714285714285,
+          "mean_score": 0.9945133941514152
+        },
+        "audio only": {
+          "n": 154,
+          "flagged_rate": 1.0,
+          "mean_score": 0.9999224578405356
+        },
+        "video+audio": {
+          "n": 154,
+          "flagged_rate": 1.0,
+          "mean_score": 0.9999337335685631
+        }
+      },
+      "modality_attribution": {
+        "real": {
+          "video_head_mean_score": 0.23396118748834888,
+          "audio_head_mean_score": 0.017903597633993452
+        },
+        "video only": {
+          "video_head_mean_score": 0.8768922830675105,
+          "audio_head_mean_score": 0.0952261622716573
+        },
+        "audio only": {
+          "video_head_mean_score": 0.5725687333904409,
+          "audio_head_mean_score": 0.9999105845178876
+        },
+        "video+audio": {
+          "video_head_mean_score": 0.885310413191445,
+          "audio_head_mean_score": 0.9999054229104674
+        }
+      },
+      "window_level": {
+        "n_windows": 22026,
+        "fused_auc": 0.9959124594337028,
+        "fused_ap": 0.9914678060993009,
+        "video_head_auc": 0.8524979513012098,
+        "audio_head_auc": 0.9976642961956097,
+        "positive_rate": 0.1994007082538818
+      },
+      "video_auc": 0.9998384633458646,
+      "threshold": 0.9930271506309509,
+      "localisation": {
+        "frame_level_auc": 0.9924868278282655,
+        "frame_level_ap": 0.9413002901570323,
+        "frame_level_balanced_accuracy": 0.9685944595599164,
+        "step_threshold": 0.051736445740743875,
+        "n_ground_truth_segments": 523,
+        "n_proposals": 636,
+        "n_segments_at_threshold": 585,
+        "ap@0.5": 0.8000097143422762,
+        "ap@0.75": 0.4190923191743574,
+        "ap@0.95": 0.02003437770728826,
+        "ap@0.5_at_threshold": 0.807590257319603
+      }
+    }
+  },
+  {
+    "epoch": 7,
+    "train_loss": 0.15776974186897277,
+    "train_loss_parts": {
+      "video": 0.06200131726302206,
+      "audio": 0.0047167338078608735,
+      "fused": 0.007393251136946492,
+      "steps": 0.08365843976140022
+    },
+    "train_seconds": 38.15565584400065,
+    "dev": {
+      "video_level": {
+        "auc": 0.9997944078947368,
+        "average_precision": 0.9999313221137244,
+        "threshold": 0.9750877618789673,
+        "accuracy": 0.9933333333333333,
+        "balanced_accuracy": 0.9955357142857143,
+        "precision": 1.0,
+        "recall": 0.9910714285714286,
+        "f1": 0.9955156950672646,
+        "false_positive_rate": 0.0,
+        "tn": 152,
+        "fp": 0,
+        "fn": 4,
+        "tp": 444,
+        "n": 600,
+        "threshold_source": "tuned_here"
+      },
+      "per_fake_type": {
+        "real": {
+          "n": 152,
+          "flagged_rate": 0.0,
+          "mean_score": 0.0397751470911891
+        },
+        "video only": {
+          "n": 140,
+          "flagged_rate": 0.9714285714285714,
+          "mean_score": 0.9920167115117823
+        },
+        "audio only": {
+          "n": 154,
+          "flagged_rate": 1.0,
+          "mean_score": 0.9999449334361337
+        },
+        "video+audio": {
+          "n": 154,
+          "flagged_rate": 1.0,
+          "mean_score": 0.999934699241217
+        }
+      },
+      "modality_attribution": {
+        "real": {
+          "video_head_mean_score": 0.19140114670402322,
+          "audio_head_mean_score": 0.017105554588367437
+        },
+        "video only": {
+          "video_head_mean_score": 0.8342695621605214,
+          "audio_head_mean_score": 0.08570955586055139
+        },
+        "audio only": {
+          "video_head_mean_score": 0.5172988850712582,
+          "audio_head_mean_score": 0.9999462799592451
+        },
+        "video+audio": {
+          "video_head_mean_score": 0.8656767358941154,
+          "audio_head_mean_score": 0.9999500164737949
+        }
+      },
+      "window_level": {
+        "n_windows": 22026,
+        "fused_auc": 0.9960673687691004,
+        "fused_ap": 0.991122963262067,
+        "video_head_auc": 0.8432165025915569,
+        "audio_head_auc": 0.9977630760953348,
+        "positive_rate": 0.1994007082538818
+      },
+      "video_auc": 0.9997944078947368,
+      "threshold": 0.9750877618789673,
+      "localisation": {
+        "frame_level_auc": 0.9910533221735027,
+        "frame_level_ap": 0.9390963914581701,
+        "frame_level_balanced_accuracy": 0.9666139716134707,
+        "step_threshold": 0.03955995389395639,
+        "n_ground_truth_segments": 523,
+        "n_proposals": 635,
+        "n_segments_at_threshold": 604,
+        "ap@0.5": 0.823121066871898,
+        "ap@0.75": 0.45900231662310165,
+        "ap@0.95": 0.02145602207787345,
+        "ap@0.5_at_threshold": 0.8020418559645865
+      }
+    }
+  },
+  {
+    "epoch": 8,
+    "train_loss": 0.14196708325743676,
+    "train_loss_parts": {
+      "video": 0.05170118715167046,
+      "audio": 0.00400664737673942,
+      "fused": 0.006298510637111031,
+      "steps": 0.079960737991333
+    },
+    "train_seconds": 38.687660984000104,
+    "dev": {
+      "video_level": {
+        "auc": 0.9996622415413534,
+        "average_precision": 0.9998875166059209,
+        "threshold": 0.9801332652568817,
+        "accuracy": 0.9916666666666667,
+        "balanced_accuracy": 0.9944196428571428,
+        "precision": 1.0,
+        "recall": 0.9888392857142857,
+        "f1": 0.9943883277216611,
+        "false_positive_rate": 0.0,
+        "tn": 152,
+        "fp": 0,
+        "fn": 5,
+        "tp": 443,
+        "n": 600,
+        "threshold_source": "tuned_here"
+      },
+      "per_fake_type": {
+        "real": {
+          "n": 152,
+          "flagged_rate": 0.0,
+          "mean_score": 0.06291633043101204
+        },
+        "video only": {
+          "n": 140,
+          "flagged_rate": 0.9642857142857143,
+          "mean_score": 0.9913262252296721
+        },
+        "audio only": {
+          "n": 154,
+          "flagged_rate": 1.0,
+          "mean_score": 0.9999382728106015
+        },
+        "video+audio": {
+          "n": 154,
+          "flagged_rate": 1.0,
+          "mean_score": 0.9999317728079758
+        }
+      },
+      "modality_attribution": {
+        "real": {
+          "video_head_mean_score": 0.20394974915078173,
+          "audio_head_mean_score": 0.017217070421619803
+        },
+        "video only": {
+          "video_head_mean_score": 0.840795653819805,
+          "audio_head_mean_score": 0.0838442555045406
+        },
+        "audio only": {
+          "video_head_mean_score": 0.5336731235170487,
+          "audio_head_mean_score": 0.9999445092368435
+        },
+        "video+audio": {
+          "video_head_mean_score": 0.8685476303787975,
+          "audio_head_mean_score": 0.9999484655919013
+        }
+      },
+      "window_level": {
+        "n_windows": 22026,
+        "fused_auc": 0.9959915764958115,
+        "fused_ap": 0.9905698850997625,
+        "video_head_auc": 0.8418181398779944,
+        "audio_head_auc": 0.9976932838476265,
+        "positive_rate": 0.1994007082538818
+      },
+      "video_auc": 0.9996622415413534,
+      "threshold": 0.9801332652568817,
+      "localisation": {
+        "frame_level_auc": 0.9903652614118301,
+        "frame_level_ap": 0.9378389463875709,
+        "frame_level_balanced_accuracy": 0.9663015090906979,
+        "step_threshold": 0.06789601516356925,
+        "n_ground_truth_segments": 523,
+        "n_proposals": 646,
+        "n_segments_at_threshold": 593,
+        "ap@0.5": 0.8258432920672854,
+        "ap@0.75": 0.47054884015175313,
+        "ap@0.95": 0.0215633955358398,
+        "ap@0.5_at_threshold": 0.810800929996131
+      }
+    }
+  }
+]

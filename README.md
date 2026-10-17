@@ -160,10 +160,12 @@ annotated periods, so the whole pipeline can be exercised without the dataset.
 
 ## Status
 
-- Pipeline verified end to end on synthetic data (CPU) and on a 40-clip-per-split
-  LAV-DF sample on the GPU.
-- Full LAV-DF cache and the four-variant comparison are the next step; see the
-  commands above.
+- Pipeline verified end to end on synthetic data (CPU) and on a LAV-DF sample
+  (3,000 train / 600 dev / 1,000 test clips) on the GPU. All four variants were
+  trained and evaluated; see `results/lavdf_sample_run/README.md` for the numbers
+  and what they do and do not show.
+- Full LAV-DF cache and the four-variant comparison at full scale are the next
+  step; see the commands above.
 - End-to-end fine-tuning (`train.source=raw`) is implemented and smoke-tested
   but has not been run at scale.
 - Cross-dataset evaluation on FakeAVCeleb is not done yet. The pipeline only

@@ -1,0 +1,171 @@
+{
+  "video_level": {
+    "auc": 0.8931037064369329,
+    "average_precision": 0.9575022392627399,
+    "threshold": 0.751282274723053,
+    "accuracy": 0.83,
+    "balanced_accuracy": 0.8089668928710849,
+    "precision": 0.9167862266857962,
+    "recall": 0.8508655126498003,
+    "f1": 0.8825966850828729,
+    "false_positive_rate": 0.23293172690763053,
+    "tn": 191,
+    "fp": 58,
+    "fn": 112,
+    "tp": 639,
+    "n": 1000,
+    "threshold_source": "given"
+  },
+  "per_fake_type": {
+    "real": {
+      "n": 249,
+      "flagged_rate": 0.23293172690763053,
+      "mean_score": 0.35999870500992515
+    },
+    "video only": {
+      "n": 257,
+      "flagged_rate": 0.9182879377431906,
+      "mean_score": 0.9339602823371017
+    },
+    "audio only": {
+      "n": 234,
+      "flagged_rate": 0.6923076923076923,
+      "mean_score": 0.7955106134898563
+    },
+    "video+audio": {
+      "n": 260,
+      "flagged_rate": 0.926923076923077,
+      "mean_score": 0.940632130477864
+    }
+  },
+  "modality_attribution": {
+    "real": {
+      "video_head_mean_score": 0.2264502702029464,
+      "audio_head_mean_score": null
+    },
+    "video only": {
+      "video_head_mean_score": 0.8521451511024407,
+      "audio_head_mean_score": null
+    },
+    "audio only": {
+      "video_head_mean_score": 0.5861385193347814,
+      "audio_head_mean_score": null
+    },
+    "video+audio": {
+      "video_head_mean_score": 0.8834290669017579,
+      "audio_head_mean_score": null
+    }
+  },
+  "window_level": {
+    "n_windows": 35033,
+    "fused_auc": 0.7545276169363995,
+    "fused_ap": 0.5386567504571161,
+    "video_head_auc": 0.8549761112025235,
+    "audio_head_auc": null,
+    "positive_rate": 0.208260782690606
+  },
+  "video_auc": 0.8931037064369329,
+  "threshold": 0.751282274723053,
+  "localisation": {
+    "frame_level_auc": 0.7601382674607433,
+    "frame_level_ap": 0.330788373565593,
+    "frame_level_balanced_accuracy": 0.6865660219756862,
+    "step_threshold": 0.25639435462653637,
+    "n_ground_truth_segments": 865,
+    "n_proposals": 6678,
+    "n_segments_at_threshold": 2722,
+    "ap@0.5": 0.17688567621493087,
+    "ap@0.75": 0.02804298647775874,
+    "ap@0.95": 0.0009775851487199775,
+    "ap@0.5_at_threshold": 0.2383984741394542
+  },
+  "checkpoint": "results/runs/real_video_only/best.pt",
+  "split": "test",
+  "n_clips": 1000,
+  "modality_swap": [
+    {
+      "fake type": "video only",
+      "model input": "fake clip as-is",
+      "clips": 150,
+      "mean_score": 0.9386835910876592,
+      "flagged_at_0.5": 0.9733333333333334
+    },
+    {
+      "fake type": "video only",
+      "model input": "fake frames + source audio",
+      "clips": 150,
+      "mean_score": 0.9386835910876592,
+      "flagged_at_0.5": 0.9733333333333334
+    },
+    {
+      "fake type": "video only",
+      "model input": "source frames + fake audio",
+      "clips": 150,
+      "mean_score": 0.3832329565069328,
+      "flagged_at_0.5": 0.38666666666666666
+    },
+    {
+      "fake type": "video only",
+      "model input": "source clip (control)",
+      "clips": 150,
+      "mean_score": 0.38127311594396207,
+      "flagged_at_0.5": 0.38666666666666666
+    },
+    {
+      "fake type": "audio only",
+      "model input": "fake clip as-is",
+      "clips": 150,
+      "mean_score": 0.7862137445791935,
+      "flagged_at_0.5": 0.88
+    },
+    {
+      "fake type": "audio only",
+      "model input": "fake frames + source audio",
+      "clips": 150,
+      "mean_score": 0.7862137445791935,
+      "flagged_at_0.5": 0.88
+    },
+    {
+      "fake type": "audio only",
+      "model input": "source frames + fake audio",
+      "clips": 150,
+      "mean_score": 0.33537681546624903,
+      "flagged_at_0.5": 0.3466666666666667
+    },
+    {
+      "fake type": "audio only",
+      "model input": "source clip (control)",
+      "clips": 150,
+      "mean_score": 0.32548029811121526,
+      "flagged_at_0.5": 0.32666666666666666
+    },
+    {
+      "fake type": "video+audio",
+      "model input": "fake clip as-is",
+      "clips": 150,
+      "mean_score": 0.9379135626306137,
+      "flagged_at_0.5": 0.9666666666666667
+    },
+    {
+      "fake type": "video+audio",
+      "model input": "fake frames + source audio",
+      "clips": 150,
+      "mean_score": 0.9379135626306137,
+      "flagged_at_0.5": 0.9666666666666667
+    },
+    {
+      "fake type": "video+audio",
+      "model input": "source frames + fake audio",
+      "clips": 150,
+      "mean_score": 0.35573947709228376,
+      "flagged_at_0.5": 0.34
+    },
+    {
+      "fake type": "video+audio",
+      "model input": "source clip (control)",
+      "clips": 150,
+      "mean_score": 0.34110386949517607,
+      "flagged_at_0.5": 0.32
+    }
+  ]
+}
