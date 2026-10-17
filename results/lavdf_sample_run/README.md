@@ -45,7 +45,7 @@ applies.
    video-only fakes) while flagging 5 % of real clips. The remaining gap is
    the visual pathway itself: see 3.
 2. **The video head improved** (window AUC 0.851 to 0.875 for cross-attention;
-   the video-only variant from 0.755 to None fused / clip AUC 0.893 to
+   the video-only variant window AUC from 0.755 to 0.792, clip AUC 0.893 to
    0.918), from the mouth stream alone, since the video head is trained the
    same way in both versions.
 3. **Audio still dominates on LAV-DF.** Audio head window AUC 0.994 against
